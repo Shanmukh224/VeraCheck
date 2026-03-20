@@ -1,0 +1,8 @@
+{
+  "name": "truthlens",
+  "version": "1.0.0",
+  "description": "AI-powered fake news detector using Google Gemini",
+  "engines": {
+    "node": "18.x"
+  }
+}
