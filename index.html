@@ -1,0 +1,88 @@
+export default async function handler(req, res) {
+  // Allow only POST
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Method not allowed" });
+  }
+
+  // CORS — allow any origin so the site works everywhere
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+
+  const { content } = req.body;
+
+  if (!content || content.trim().length < 5) {
+    return res.status(400).json({ error: "No content provided." });
+  }
+
+  const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+
+  if (!GEMINI_API_KEY) {
+    return res.status(500).json({ error: "Server misconfiguration: API key missing." });
+  }
+
+  const prompt = `You are TruthLens, an expert fake news detection AI. Analyze this news content for accuracy:
+
+---
+${content.slice(0, 4000)}
+---
+
+Use Google Search to find evidence for or against this claim. Then respond ONLY with a valid raw JSON object — no markdown fences, no explanation, just the JSON:
+
+{
+  "verdict": "REAL" or "FAKE" or "UNCERTAIN",
+  "confidence": <integer 0-100>,
+  "title": "<3-5 word verdict phrase>",
+  "subtitle": "<one clear sentence explaining the verdict>",
+  "summary": "<2-3 sentences summarizing the claim and your finding>",
+  "findings": "<2-3 key findings separated by the bullet character •>",
+  "indicators": [
+    {"label": "<short signal label>", "type": "positive" or "negative" or "neutral"}
+  ],
+  "sources": ["<source name 1>", "<source name 2>", "<source name 3>"]
+}
+
+Rules:
+- REAL = confirmed by credible sources
+- FAKE = contradicted or debunked by credible sources  
+- UNCERTAIN = unverified, mixed evidence, or no credible sources found
+- indicators: 3-5 items covering credibility, corroboration, language tone, source quality
+- sources: actual outlets found via search (Reuters, BBC, AP News, Snopes, etc.)
+- confidence: 90+ = very confident, 60-89 = moderate, below 60 = low`;
+
+  try {
+    const geminiRes = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          tools: [{ google_search: {} }],
+          generationConfig: { temperature: 0.1, maxOutputTokens: 1200 },
+        }),
+      }
+    );
+
+    const data = await geminiRes.json();
+
+    if (!geminiRes.ok) {
+      const msg = data.error?.message || "Gemini API error";
+      return res.status(502).json({ error: msg });
+    }
+
+    const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    const clean = raw.replace(/```json|```/g, "").trim();
+    const match = clean.match(/\{[\s\S]*\}/);
+
+    if (!match) {
+      return res.status(502).json({ error: "Could not parse AI response. Please try again." });
+    }
+
+    const result = JSON.parse(match[0]);
+    return res.status(200).json(result);
+
+  } catch (err) {
+    console.error("TruthLens error:", err);
+    return res.status(500).json({ error: err.message || "Internal server error" });
+  }
+}
