@@ -8,7 +8,7 @@ export default async function handler(req, res) {
   if (!GEMINI_API_KEY) return res.status(500).json({ error: "API key missing." });
   const prompt = `You are TruthLens, an expert fake news detection AI. Analyze this news content:\n\n---\n${content.slice(0,4000)}\n---\n\nSearch the web for evidence. Respond ONLY with this exact JSON (no markdown):\n{"verdict":"REAL" or "FAKE" or "UNCERTAIN","confidence":<0-100>,"title":"<3-5 word phrase>","subtitle":"<one sentence>","summary":"<2-3 sentences>","findings":"<bullet points using •>","indicators":[{"label":"<signal>","type":"positive" or "negative" or "neutral"}],"sources":["source1","source2","source3"]}`;
   try {
-    const geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`, {
+    const geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], tools: [{ google_search: {} }], generationConfig: { temperature: 0.1, maxOutputTokens: 1200 } })
