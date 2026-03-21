@@ -9,15 +9,6 @@ module.exports = async function handler(req, res) {
   const KEY = process.env.GEMINI_API_KEY;
   if (!KEY) return res.status(500).json({ error: "API key not configured." });
 
-const models = [
-    "gemini-2.0-flash-lite",
-    "gemini-2.0-flash-exp",
-    "gemini-1.5-flash-002",
-    "gemini-1.5-flash-001",
-    "gemini-1.5-pro-002",
-    "gemini-1.5-pro-001"
-  ];
-
   const prompt = `Analyze this news claim and respond ONLY with raw JSON, no markdown:
 
 CLAIM: ${content.slice(0, 2000)}
@@ -27,38 +18,43 @@ Return exactly this JSON:
 
 Replace all values with real analysis. verdict must be REAL, FAKE, or UNCERTAIN.`;
 
+  const models = [
+    "gemini-2.0-flash",
+    "gemini-2.0-flash-lite",
+    "gemini-2.0-flash-exp",
+    "gemini-1.5-flash",
+    "gemini-1.5-flash-8b",
+    "gemini-1.5-pro"
+  ];
+
+  const versions = ["v1", "v1beta"];
   let lastError = "";
 
-  for (const model of models) {
-    try {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${KEY}`;
-      const geminiRes = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.1, maxOutputTokens: 800 }
-        })
-      });
+  for (const version of versions) {
+    for (const model of models) {
+      try {
+        const url = `https://generativelanguage.googleapis.com/${version}/models/${model}:generateContent?key=${KEY}`;
+        const geminiRes = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { temperature: 0.1, maxOutputTokens: 800 }
+          })
+        });
 
-      const data = await geminiRes.json();
+        const data = await geminiRes.json();
+        if (!geminiRes.ok) { lastError = data.error?.message || "error"; continue; }
 
-      if (!geminiRes.ok) {
-        lastError = data.error?.message || "API error";
-        continue;
-      }
+        const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+        const match = raw.replace(/```json/g,"").replace(/```/g,"").trim().match(/\{[\s\S]*\}/);
+        if (!match) { lastError = "parse error"; continue; }
 
-      const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
-      const match = raw.replace(/```json/g,"").replace(/```/g,"").trim().match(/\{[\s\S]*\}/);
-      if (!match) { lastError = "Could not parse response"; continue; }
+        return res.status(200).json({ ...JSON.parse(match[0]), _model: `${version}/${model}` });
 
-      return res.status(200).json(JSON.parse(match[0]));
-
-    } catch (err) {
-      lastError = err.message;
-      continue;
+      } catch (err) { lastError = err.message; continue; }
     }
   }
 
-  return res.status(502).json({ error: "All models failed: " + lastError });
+  return res.status(502).json({ error: "All models failed. Last error: " + lastError });
 };
