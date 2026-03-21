@@ -39,7 +39,7 @@ Respond with exactly this JSON structure:
 Use verdict REAL if confirmed, FAKE if debunked, UNCERTAIN if unclear. Replace all values with your actual analysis.`;
 
   try {
-    const url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=" + KEY;
+    const url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" + KEY;
 
     const geminiRes = await fetch(url, {
       method: "POST",
