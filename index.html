@@ -1,88 +1,445 @@
-export default async function handler(req, res) {
-  // Allow only POST
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>TruthLens — AI Fake News Detector</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet"/>
+<style>
+  :root{
+    --bg:#040810;--card:#0c1525;--border:rgba(0,200,255,0.12);
+    --accent:#00c8ff;--accent2:#7b2fff;--accent3:#ff3b6e;
+    --green:#00ffaa;--yellow:#ffcc00;
+    --text:#e8f4ff;--muted:#5a7a99;
   }
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{background:var(--bg);color:var(--text);font-family:'Syne',sans-serif;min-height:100vh;overflow-x:hidden;cursor:none}
 
-  // CORS — allow any origin so the site works everywhere
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  .cursor{width:12px;height:12px;background:var(--accent);border-radius:50%;position:fixed;top:0;left:0;pointer-events:none;z-index:9999;transform:translate(-50%,-50%);transition:width .2s,height .2s,background .2s;mix-blend-mode:screen}
+  .cursor-ring{width:36px;height:36px;border:1.5px solid rgba(0,200,255,0.45);border-radius:50%;position:fixed;top:0;left:0;pointer-events:none;z-index:9998;transform:translate(-50%,-50%)}
 
-  const { content } = req.body;
+  #bg-canvas{position:fixed;top:0;left:0;width:100%;height:100%;z-index:0;opacity:.55}
+  body::before{content:'';position:fixed;inset:0;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");pointer-events:none;z-index:1;opacity:.35}
+  body::after{content:'';position:fixed;inset:0;background:repeating-linear-gradient(to bottom,transparent 0px,transparent 3px,rgba(0,200,255,.012) 3px,rgba(0,200,255,.012) 4px);pointer-events:none;z-index:2}
 
-  if (!content || content.trim().length < 5) {
-    return res.status(400).json({ error: "No content provided." });
+  .wrapper{position:relative;z-index:10;max-width:920px;margin:0 auto;padding:0 24px 80px}
+
+  /* ── Header ── */
+  header{display:flex;align-items:center;justify-content:space-between;padding:28px 0 0}
+  .logo{display:flex;align-items:center;gap:10px;font-size:1.15rem;font-weight:800;letter-spacing:-.03em;color:var(--accent)}
+  .logo-icon{width:34px;height:34px;border:2px solid var(--accent);border-radius:8px;display:grid;place-items:center;position:relative;box-shadow:0 0 18px rgba(0,200,255,.4)}
+  .logo-icon::after{content:'';position:absolute;inset:4px;border-radius:4px;background:var(--accent);animation:pulse 2.5s ease-in-out infinite}
+  @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.7)}}
+  .nav-badge{font-family:'Space Mono',monospace;font-size:.62rem;letter-spacing:.1em;color:var(--muted);border:1px solid var(--border);padding:5px 10px;border-radius:20px;background:rgba(0,200,255,.03);display:flex;align-items:center;gap:6px}
+  .live-dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);animation:pulse 1.8s infinite}
+
+  /* ── Hero ── */
+  .hero{padding:64px 0 44px;text-align:center}
+  .eyebrow{font-family:'Space Mono',monospace;font-size:.66rem;letter-spacing:.22em;color:var(--accent);text-transform:uppercase;margin-bottom:18px;opacity:0;animation:up .7s .15s forwards}
+  h1{font-size:clamp(2.8rem,7vw,5.2rem);font-weight:800;line-height:.94;letter-spacing:-.04em;margin-bottom:18px;opacity:0;animation:up .7s .3s forwards}
+  .hl{background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;position:relative;display:inline-block}
+  .hl::after{content:'';position:absolute;bottom:-4px;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:2px;box-shadow:0 0 12px var(--accent)}
+  .sub{font-size:1.05rem;color:var(--muted);max-width:480px;margin:0 auto 36px;line-height:1.68;opacity:0;animation:up .7s .45s forwards}
+  @keyframes up{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+
+  .stats{display:flex;justify-content:center;gap:44px;margin-bottom:44px;opacity:0;animation:up .7s .6s forwards}
+  .sv{font-size:1.4rem;font-weight:800;background:linear-gradient(135deg,var(--accent),var(--green));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;text-align:center}
+  .sl{font-family:'Space Mono',monospace;font-size:.56rem;letter-spacing:.12em;color:var(--muted);text-transform:uppercase;margin-top:3px;text-align:center}
+
+  /* ── Input Card ── */
+  .card{background:var(--card);border:1px solid var(--border);border-radius:20px;padding:28px;position:relative;box-shadow:0 20px 60px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.04);opacity:0;animation:up .7s .75s forwards;overflow:hidden}
+  .card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--accent),var(--accent2),transparent);opacity:.7}
+
+  .tabs{display:flex;gap:4px;background:rgba(255,255,255,.03);border-radius:10px;padding:4px;margin-bottom:20px;width:fit-content}
+  .tab{padding:8px 18px;border-radius:7px;font-size:.82rem;font-weight:600;cursor:pointer;border:none;background:transparent;color:var(--muted);font-family:'Syne',sans-serif;transition:all .2s}
+  .tab.active{background:var(--accent);color:#000;box-shadow:0 0 16px rgba(0,200,255,.4)}
+  .tab:not(.active):hover{color:var(--text)}
+  .tp{display:none}.tp.active{display:block}
+
+  textarea,input[type=text]{width:100%;background:rgba(255,255,255,.03);border:1px solid rgba(0,200,255,.14);border-radius:12px;padding:16px 18px;color:var(--text);font-family:'Space Mono',monospace;font-size:.82rem;line-height:1.6;resize:none;outline:none;transition:border-color .2s,box-shadow .2s}
+  textarea:focus,input:focus{border-color:rgba(0,200,255,.5);box-shadow:0 0 0 3px rgba(0,200,255,.07)}
+  textarea{min-height:140px}
+  input[type=text]{height:50px}
+
+  .input-row{display:flex;gap:12px;margin-top:14px;align-items:center}
+  .cc{font-family:'Space Mono',monospace;font-size:.65rem;color:var(--muted);flex:1}
+
+  .btn-go{background:linear-gradient(135deg,var(--accent),var(--accent2));border:none;border-radius:12px;padding:13px 28px;font-family:'Syne',sans-serif;font-weight:700;font-size:.9rem;color:#fff;cursor:pointer;display:flex;align-items:center;gap:8px;transition:transform .15s,box-shadow .2s;box-shadow:0 4px 20px rgba(0,200,255,.3);position:relative;overflow:hidden}
+  .btn-go::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,var(--accent2),var(--accent));opacity:0;transition:opacity .2s}
+  .btn-go:hover{transform:translateY(-2px);box-shadow:0 8px 30px rgba(0,200,255,.4)}
+  .btn-go:hover::before{opacity:1}
+  .btn-go>*{position:relative;z-index:1}
+  .btn-go.loading{pointer-events:none;opacity:.7}
+
+  .btn-clr{background:transparent;border:1px solid var(--border);border-radius:10px;padding:12px 16px;color:var(--muted);cursor:pointer;font-family:'Syne',sans-serif;font-size:.8rem;transition:all .2s}
+  .btn-clr:hover{border-color:var(--accent3);color:var(--accent3)}
+
+  .err{background:rgba(255,59,110,.08);border:1px solid rgba(255,59,110,.2);border-radius:12px;padding:14px 18px;color:var(--accent3);font-size:.8rem;margin-top:14px;display:none;font-family:'Space Mono',monospace;line-height:1.55}
+  .err.show{display:block}
+
+  /* ── Loader ── */
+  .loader{display:none;padding:40px 20px;text-align:center}
+  .loader.show{display:block}
+  .lring{width:70px;height:70px;margin:0 auto 24px}
+  .lring svg{width:100%;height:100%;animation:spin 2s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .lsteps{display:flex;flex-direction:column;gap:10px;max-width:320px;margin:0 auto}
+  .lstep{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:10px;background:rgba(0,200,255,.03);border:1px solid transparent;font-size:.78rem;font-family:'Space Mono',monospace;color:var(--muted);transition:all .4s}
+  .lstep.active{border-color:rgba(0,200,255,.22);color:var(--accent);background:rgba(0,200,255,.07)}
+  .lstep.done{border-color:rgba(0,255,170,.18);color:var(--green);background:rgba(0,255,170,.05)}
+  .dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;background:var(--muted);transition:background .3s}
+  .lstep.active .dot{background:var(--accent);box-shadow:0 0 8px var(--accent);animation:blink 1s infinite}
+  .lstep.done .dot{background:var(--green);box-shadow:0 0 8px var(--green)}
+  @keyframes blink{0%,100%{opacity:1}50%{opacity:.25}}
+
+  /* ── Result ── */
+  .result{display:none;margin-top:24px;border-radius:20px;overflow:hidden}
+  .result.show{display:block;animation:pop .6s cubic-bezier(.34,1.56,.64,1) forwards}
+  @keyframes pop{from{opacity:0;transform:scale(.96) translateY(14px)}to{opacity:1;transform:scale(1) translateY(0)}}
+
+  .rh{padding:28px 28px 20px;display:flex;align-items:flex-start;gap:20px}
+  .vicon{width:64px;height:64px;flex-shrink:0;border-radius:16px;display:grid;place-items:center;font-size:1.9rem;position:relative}
+  .vicon::after{content:'';position:absolute;inset:-3px;border-radius:19px;border:2px solid currentColor;opacity:.35;animation:rp 2s ease-in-out infinite}
+  @keyframes rp{0%,100%{transform:scale(1);opacity:.35}50%{transform:scale(1.08);opacity:.08}}
+  .vr .vicon{background:rgba(0,255,170,.1);color:var(--green)}
+  .vf .vicon{background:rgba(255,59,110,.1);color:var(--accent3)}
+  .vu .vicon{background:rgba(255,204,0,.1);color:var(--yellow)}
+  .vr{background:linear-gradient(135deg,rgba(0,255,170,.06),rgba(0,20,40,.95));border:1px solid rgba(0,255,170,.2)}
+  .vf{background:linear-gradient(135deg,rgba(255,59,110,.08),rgba(30,0,10,.95));border:1px solid rgba(255,59,110,.25)}
+  .vu{background:linear-gradient(135deg,rgba(255,204,0,.06),rgba(20,15,0,.95));border:1px solid rgba(255,204,0,.2)}
+  .vmeta{flex:1}
+  .vlabel{font-family:'Space Mono',monospace;font-size:.62rem;letter-spacing:.15em;text-transform:uppercase;margin-bottom:5px;opacity:.55}
+  .vtitle{font-size:1.75rem;font-weight:800;line-height:1;margin-bottom:6px;letter-spacing:-.03em}
+  .vr .vtitle{color:var(--green)}.vf .vtitle{color:var(--accent3)}.vu .vtitle{color:var(--yellow)}
+  .vsub{font-size:.86rem;color:var(--muted);font-weight:400;line-height:1.5}
+
+  .score-sec{padding:0 28px 20px;display:flex;align-items:center;gap:16px}
+  .slb{font-family:'Space Mono',monospace;font-size:.62rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);white-space:nowrap;width:108px}
+  .sbar-wrap{flex:1;height:8px;background:rgba(255,255,255,.05);border-radius:4px;overflow:hidden}
+  .sbar{height:100%;border-radius:4px;width:0%;transition:width 1.2s cubic-bezier(.22,1,.36,1);position:relative}
+  .sbar::after{content:'';position:absolute;right:0;top:50%;transform:translateY(-50%);width:14px;height:14px;border-radius:50%;background:inherit;box-shadow:0 0 10px currentColor}
+  .rb{background:linear-gradient(90deg,#00cc88,#00ffaa)}
+  .fb{background:linear-gradient(90deg,#cc1144,#ff3b6e)}
+  .ub{background:linear-gradient(90deg,#cc9900,#ffcc00)}
+  .sval{font-family:'Space Mono',monospace;font-size:.8rem;font-weight:700;width:40px;text-align:right}
+
+  .rbody{padding:0 28px 28px}
+  .inds{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 16px}
+  .ind{display:flex;align-items:center;gap:6px;padding:6px 12px;border-radius:8px;font-size:.7rem;font-weight:600;font-family:'Space Mono',monospace}
+  .ip{background:rgba(0,255,170,.08);color:var(--green);border:1px solid rgba(0,255,170,.2)}
+  .in{background:rgba(255,59,110,.08);color:var(--accent3);border:1px solid rgba(255,59,110,.2)}
+  .iu{background:rgba(255,204,0,.08);color:var(--yellow);border:1px solid rgba(255,204,0,.2)}
+
+  .agrid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px}
+  @media(max-width:580px){.agrid{grid-template-columns:1fr}}
+  .ab{background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:12px;padding:16px;transition:border-color .2s}
+  .ab:hover{border-color:rgba(0,200,255,.22)}
+  .ablabel{font-family:'Space Mono',monospace;font-size:.58rem;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);margin-bottom:8px;display:flex;align-items:center;gap:6px}
+  .ablabel::before{content:'';width:4px;height:4px;border-radius:50%;background:var(--accent);flex-shrink:0}
+  .abtext{font-size:.8rem;color:#aac8e0;line-height:1.65}
+
+  .srcs-sec{margin-top:14px}
+  .srcs-lbl{font-family:'Space Mono',monospace;font-size:.58rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:10px}
+  .chip{display:inline-flex;align-items:center;gap:5px;background:rgba(0,200,255,.05);border:1px solid rgba(0,200,255,.14);border-radius:20px;padding:5px 12px;font-size:.7rem;font-family:'Space Mono',monospace;color:var(--accent);margin:3px 4px 3px 0;transition:all .2s}
+  .chip:hover{background:rgba(0,200,255,.1);border-color:rgba(0,200,255,.3)}
+
+  .actions{display:flex;gap:10px;flex-wrap:wrap;padding:18px 28px 26px;border-top:1px solid var(--border)}
+  .btn-s{background:transparent;border:1px solid var(--border);border-radius:10px;padding:10px 18px;color:var(--muted);cursor:pointer;font-family:'Syne',sans-serif;font-size:.78rem;font-weight:600;transition:all .2s;display:flex;align-items:center;gap:6px}
+  .btn-s:hover{border-color:var(--accent);color:var(--accent)}
+
+  /* ── History ── */
+  .hist-sec{margin-top:48px;opacity:0;animation:up .7s .95s forwards}
+  .hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+  .htitle{font-size:.74rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;gap:8px}
+  .htitle::before{content:'';width:20px;height:1px;background:var(--muted)}
+  .hclr{background:none;border:none;cursor:pointer;font-family:'Space Mono',monospace;font-size:.62rem;color:var(--muted);transition:color .2s}
+  .hclr:hover{color:var(--accent3)}
+  .hlist{display:flex;flex-direction:column;gap:8px}
+  .hitem{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 18px;display:flex;align-items:center;gap:14px;cursor:pointer;transition:all .2s}
+  .hitem:hover{border-color:rgba(0,200,255,.22);transform:translateX(3px)}
+  .hdot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+  .dr{background:var(--green);box-shadow:0 0 7px var(--green)}
+  .df{background:var(--accent3);box-shadow:0 0 7px var(--accent3)}
+  .du{background:var(--yellow);box-shadow:0 0 7px var(--yellow)}
+  .htext{flex:1;font-size:.78rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .htime{font-family:'Space Mono',monospace;font-size:.6rem;color:var(--muted);opacity:.45;white-space:nowrap}
+  .hempty{padding:28px;text-align:center;font-family:'Space Mono',monospace;font-size:.7rem;color:var(--muted);border:1px dashed var(--border);border-radius:12px;letter-spacing:.05em}
+
+  footer{text-align:center;padding:36px 0 18px;font-family:'Space Mono',monospace;font-size:.6rem;color:var(--muted);letter-spacing:.08em;position:relative;z-index:10;line-height:1.8}
+</style>
+</head>
+<body>
+<div class="cursor" id="cursor"></div>
+<div class="cursor-ring" id="cursorRing"></div>
+<canvas id="bg-canvas"></canvas>
+
+<div class="wrapper">
+  <header>
+    <div class="logo"><div class="logo-icon"></div>TruthLens</div>
+    <div class="nav-badge"><div class="live-dot"></div>LIVE · AI FACT-CHECKER</div>
+  </header>
+
+  <section class="hero">
+    <div class="eyebrow">— Real-time Misinformation Detection —</div>
+    <h1>Detect <span class="hl">Truth</span><br>in Seconds</h1>
+    <p class="sub">Paste any news headline or article. Our AI searches the web in real time to verify or debunk the claim — instantly, for free.</p>
+    <div class="stats">
+      <div><div class="sv">Free</div><div class="sl">No Signup</div></div>
+      <div><div class="sv">Live</div><div class="sl">Web Search</div></div>
+      <div><div class="sv">AI</div><div class="sl">Gemini 2.0</div></div>
+    </div>
+  </section>
+
+  <div class="card" id="inputCard">
+    <div class="tabs">
+      <button class="tab active" onclick="switchTab('text',this)">Paste Article</button>
+      <button class="tab" onclick="switchTab('hl',this)">Headline / Claim</button>
+    </div>
+    <div id="tab-text" class="tp active">
+      <textarea id="newsText" placeholder="Paste your news article, claim, or content here…" maxlength="4000" oninput="updateCount()"></textarea>
+    </div>
+    <div id="tab-hl" class="tp">
+      <input type="text" id="newsHL" placeholder="e.g. "Scientists discover cure for cancer"" maxlength="500" oninput="updateCount()"/>
+    </div>
+    <div class="input-row">
+      <div class="cc" id="charCount">0 / 4000</div>
+      <button class="btn-clr" onclick="clearAll()">✕ Clear</button>
+      <button class="btn-go" id="analyzeBtn" onclick="analyzeNews()">
+        <span>⚡</span><span>Analyze Now</span>
+      </button>
+    </div>
+    <div class="err" id="errMsg"></div>
+  </div>
+
+  <div class="loader" id="loader">
+    <div class="lring">
+      <svg viewBox="0 0 70 70">
+        <circle cx="35" cy="35" r="30" fill="none" stroke="rgba(0,200,255,0.1)" stroke-width="3"/>
+        <circle cx="35" cy="35" r="30" fill="none" stroke="url(#g1)" stroke-width="3" stroke-dasharray="188" stroke-dashoffset="140" stroke-linecap="round"/>
+        <defs>
+          <linearGradient id="g1" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stop-color="#00c8ff"/>
+            <stop offset="100%" stop-color="#7b2fff"/>
+          </linearGradient>
+        </defs>
+      </svg>
+    </div>
+    <div class="lsteps">
+      <div class="lstep" id="s1"><div class="dot"></div>Scanning your input…</div>
+      <div class="lstep" id="s2"><div class="dot"></div>Searching the web live…</div>
+      <div class="lstep" id="s3"><div class="dot"></div>Cross-referencing sources…</div>
+      <div class="lstep" id="s4"><div class="dot"></div>Generating verdict…</div>
+    </div>
+  </div>
+
+  <div class="result" id="result">
+    <div class="rh">
+      <div class="vicon" id="rIcon"></div>
+      <div class="vmeta">
+        <div class="vlabel">ANALYSIS COMPLETE</div>
+        <div class="vtitle" id="rTitle"></div>
+        <div class="vsub" id="rSub"></div>
+      </div>
+    </div>
+    <div class="score-sec">
+      <div class="slb">CONFIDENCE</div>
+      <div class="sbar-wrap"><div class="sbar" id="sbar"></div></div>
+      <div class="sval" id="sval"></div>
+    </div>
+    <div class="rbody">
+      <div class="inds" id="inds"></div>
+      <div class="agrid">
+        <div class="ab"><div class="ablabel">Summary</div><div class="abtext" id="rSum"></div></div>
+        <div class="ab"><div class="ablabel">Key Findings</div><div class="abtext" id="rFind"></div></div>
+      </div>
+      <div class="srcs-sec">
+        <div class="srcs-lbl">SOURCES CHECKED</div>
+        <div id="srcs"></div>
+      </div>
+    </div>
+    <div class="actions">
+      <button class="btn-s" onclick="again()">🔍 Analyze Another</button>
+      <button class="btn-s" onclick="copyRes()">📋 Copy Result</button>
+    </div>
+  </div>
+
+  <div class="hist-sec">
+    <div class="hdr">
+      <div class="htitle">Recent Checks</div>
+      <button class="hclr" onclick="clearHist()">Clear all</button>
+    </div>
+    <div class="hlist" id="hlist">
+      <div class="hempty" id="hempty">No analyses yet. Paste something above to get started.</div>
+    </div>
+  </div>
+</div>
+
+<footer>
+  TruthLens · Powered by Google Gemini 2.0 Flash · Free &amp; No Sign-up Required<br>
+  Not a substitute for professional journalism or fact-checking
+</footer>
+
+<script>
+// ── Canvas ──
+const cvs=document.getElementById('bg-canvas'),ctx=cvs.getContext('2d');
+let W,H,nodes=[],mx=-999,my=-999;
+function resize(){W=cvs.width=window.innerWidth;H=cvs.height=window.innerHeight;}
+resize();window.addEventListener('resize',()=>{resize();initN();});
+function initN(){nodes=[];const c=Math.floor(W*H/15000);for(let i=0;i<c;i++)nodes.push({x:Math.random()*W,y:Math.random()*H,vx:(Math.random()-.5)*.3,vy:(Math.random()-.5)*.3,r:Math.random()*2+.5,p:Math.random()*Math.PI*2});}
+initN();
+function drawCvs(){
+  ctx.clearRect(0,0,W,H);
+  nodes.forEach(n=>{
+    n.x+=n.vx;n.y+=n.vy;n.p+=.018;
+    if(n.x<0||n.x>W)n.vx*=-1;if(n.y<0||n.y>H)n.vy*=-1;
+    const dx=n.x-mx,dy=n.y-my,d=Math.sqrt(dx*dx+dy*dy);
+    if(d<120){n.vx+=dx/d*.35;n.vy+=dy/d*.35;}
+    const a=.35+.28*Math.sin(n.p);
+    ctx.beginPath();ctx.arc(n.x,n.y,n.r*(1+.28*Math.sin(n.p)),0,Math.PI*2);
+    ctx.fillStyle=`rgba(0,200,255,${a*.75})`;ctx.fill();
+  });
+  nodes.forEach((a,i)=>nodes.forEach((b,j)=>{
+    if(j<=i)return;
+    const dx=a.x-b.x,dy=a.y-b.y,d=Math.sqrt(dx*dx+dy*dy);
+    if(d>135)return;
+    const al=(1-d/135)*.15;
+    const g=ctx.createLinearGradient(a.x,a.y,b.x,b.y);
+    g.addColorStop(0,`rgba(0,200,255,${al})`);g.addColorStop(1,`rgba(123,47,255,${al})`);
+    ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);
+    ctx.strokeStyle=g;ctx.lineWidth=.65;ctx.stroke();
+  }));
+  requestAnimationFrame(drawCvs);
+}
+drawCvs();
+window.addEventListener('mousemove',e=>{mx=e.clientX;my=e.clientY;});
+
+// ── Cursor ──
+const ce=document.getElementById('cursor'),cr=document.getElementById('cursorRing');
+let cx=0,cy=0,rx=0,ry=0;
+document.addEventListener('mousemove',e=>{cx=e.clientX;cy=e.clientY;ce.style.left=cx+'px';ce.style.top=cy+'px';});
+(function a(){rx+=(cx-rx)*.14;ry+=(cy-ry)*.14;cr.style.left=rx+'px';cr.style.top=ry+'px';requestAnimationFrame(a);})();
+document.querySelectorAll('button,textarea,input,a').forEach(el=>{
+  el.addEventListener('mouseenter',()=>{ce.style.width='20px';ce.style.height='20px';ce.style.background='#7b2fff';});
+  el.addEventListener('mouseleave',()=>{ce.style.width='12px';ce.style.height='12px';ce.style.background='#00c8ff';});
+});
+
+// ── State ──
+let activeTab='text',cur=null;
+let hist=JSON.parse(localStorage.getItem('tl_h')||'[]');
+
+function switchTab(t,el){
+  activeTab=t;
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));el.classList.add('active');
+  document.querySelectorAll('.tp').forEach(x=>x.classList.remove('active'));
+  document.getElementById('tab-'+t).classList.add('active');updateCount();
+}
+function updateCount(){
+  const v=activeTab==='text'?document.getElementById('newsText').value.length:document.getElementById('newsHL').value.length;
+  document.getElementById('charCount').textContent=v+' / '+(activeTab==='text'?'4000':'500');
+}
+function clearAll(){
+  document.getElementById('newsText').value='';document.getElementById('newsHL').value='';updateCount();
+  const r=document.getElementById('result');r.style.display='none';r.classList.remove('show');
+  document.getElementById('errMsg').classList.remove('show');
+}
+function showErr(m){const e=document.getElementById('errMsg');e.innerHTML='⚠ '+m;e.classList.add('show');setTimeout(()=>e.classList.remove('show'),9000);}
+
+// ── Loader ──
+let st=null;
+function startLoader(){
+  ['s1','s2','s3','s4'].forEach(s=>{const e=document.getElementById(s);e.classList.remove('active','done');});
+  let i=0;
+  function tick(){if(i>0){const p=document.getElementById('s'+i);if(p)p.classList.replace('active','done');}i++;const c=document.getElementById('s'+i);if(c){c.classList.add('active');st=setTimeout(tick,1900);}}
+  tick();
+}
+function stopLoader(){clearTimeout(st);['s1','s2','s3','s4'].forEach(s=>document.getElementById(s).classList.add('done'));}
+
+// ── Analyze ──
+async function analyzeNews(){
+  const content=activeTab==='text'?document.getElementById('newsText').value.trim():document.getElementById('newsHL').value.trim();
+  if(!content){showErr('Please enter some news content to analyze.');return;}
+  if(content.length<8){showErr('Input too short. Please provide more context.');return;}
+
+  const rc=document.getElementById('result');
+  rc.classList.remove('show');rc.style.display='none';
+  document.getElementById('errMsg').classList.remove('show');
+  document.getElementById('loader').classList.add('show');
+  document.getElementById('analyzeBtn').classList.add('loading');
+  startLoader();
+
+  try{
+    const res=await fetch('/api/analyze',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({content})
+    });
+    const data=await res.json();
+    if(!res.ok)throw new Error(data.error||'Server error '+res.status);
+    stopLoader();
+    document.getElementById('loader').classList.remove('show');
+    document.getElementById('analyzeBtn').classList.remove('loading');
+    renderResult(data,content);
+    saveHist(data,content);
+  }catch(err){
+    document.getElementById('loader').classList.remove('show');
+    document.getElementById('analyzeBtn').classList.remove('loading');
+    stopLoader();
+    let m=err.message||'Analysis failed.';
+    if(m.toLowerCase().includes('fetch'))m='Cannot reach server. Make sure the site is deployed on Vercel.';
+    showErr(m);
   }
-
-  const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-
-  if (!GEMINI_API_KEY) {
-    return res.status(500).json({ error: "Server misconfiguration: API key missing." });
-  }
-
-  const prompt = `You are TruthLens, an expert fake news detection AI. Analyze this news content for accuracy:
-
----
-${content.slice(0, 4000)}
----
-
-Use Google Search to find evidence for or against this claim. Then respond ONLY with a valid raw JSON object — no markdown fences, no explanation, just the JSON:
-
-{
-  "verdict": "REAL" or "FAKE" or "UNCERTAIN",
-  "confidence": <integer 0-100>,
-  "title": "<3-5 word verdict phrase>",
-  "subtitle": "<one clear sentence explaining the verdict>",
-  "summary": "<2-3 sentences summarizing the claim and your finding>",
-  "findings": "<2-3 key findings separated by the bullet character •>",
-  "indicators": [
-    {"label": "<short signal label>", "type": "positive" or "negative" or "neutral"}
-  ],
-  "sources": ["<source name 1>", "<source name 2>", "<source name 3>"]
 }
 
-Rules:
-- REAL = confirmed by credible sources
-- FAKE = contradicted or debunked by credible sources  
-- UNCERTAIN = unverified, mixed evidence, or no credible sources found
-- indicators: 3-5 items covering credibility, corroboration, language tone, source quality
-- sources: actual outlets found via search (Reuters, BBC, AP News, Snopes, etc.)
-- confidence: 90+ = very confident, 60-89 = moderate, below 60 = low`;
-
-  try {
-    const geminiRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          tools: [{ google_search: {} }],
-          generationConfig: { temperature: 0.1, maxOutputTokens: 1200 },
-        }),
-      }
-    );
-
-    const data = await geminiRes.json();
-
-    if (!geminiRes.ok) {
-      const msg = data.error?.message || "Gemini API error";
-      return res.status(502).json({ error: msg });
-    }
-
-    const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
-    const clean = raw.replace(/```json|```/g, "").trim();
-    const match = clean.match(/\{[\s\S]*\}/);
-
-    if (!match) {
-      return res.status(502).json({ error: "Could not parse AI response. Please try again." });
-    }
-
-    const result = JSON.parse(match[0]);
-    return res.status(200).json(result);
-
-  } catch (err) {
-    console.error("TruthLens error:", err);
-    return res.status(500).json({ error: err.message || "Internal server error" });
-  }
+function renderResult(r,input){
+  const card=document.getElementById('result');
+  const vc=r.verdict==='REAL'?'vr':r.verdict==='FAKE'?'vf':'vu';
+  const icon=r.verdict==='REAL'?'✓':r.verdict==='FAKE'?'✕':'?';
+  const bc=r.verdict==='REAL'?'rb':r.verdict==='FAKE'?'fb':'ub';
+  card.className='result show '+vc;card.style.display='';
+  document.getElementById('rIcon').textContent=icon;
+  document.getElementById('rTitle').textContent=r.title||r.verdict;
+  document.getElementById('rSub').textContent=r.subtitle||'';
+  document.getElementById('rSum').textContent=r.summary||'';
+  document.getElementById('rFind').innerHTML=(r.findings||'').replace(/•/g,'<br>•').replace(/^<br>/,'');
+  const sb=document.getElementById('sbar');sb.className='sbar '+bc;sb.style.width='0%';
+  document.getElementById('sval').textContent=(r.confidence||0)+'%';
+  setTimeout(()=>sb.style.width=(r.confidence||0)+'%',100);
+  const inds=document.getElementById('inds');inds.innerHTML='';
+  (r.indicators||[]).forEach(x=>{const cl=x.type==='positive'?'ip':x.type==='negative'?'in':'iu';const sy=x.type==='positive'?'✓':x.type==='negative'?'✕':'~';inds.innerHTML+=`<div class="ind ${cl}">${sy} ${x.label}</div>`;});
+  const srcs=document.getElementById('srcs');srcs.innerHTML='';
+  (r.sources||[]).forEach(s=>srcs.innerHTML+=`<span class="chip">◆ ${s}</span>`);
+  cur={...r,input};
+  card.scrollIntoView({behavior:'smooth',block:'nearest'});
 }
+
+function again(){clearAll();window.scrollTo({top:0,behavior:'smooth'});}
+function copyRes(){
+  if(!cur)return;
+  const t=`TruthLens Result\nVerdict: ${cur.verdict} (${cur.confidence}%)\n\n${cur.summary}\n\nFindings:\n${cur.findings}\n\nSources: ${(cur.sources||[]).join(', ')}`;
+  navigator.clipboard.writeText(t).then(()=>{const b=event.target.closest('button');const o=b.innerHTML;b.innerHTML='✓ Copied!';setTimeout(()=>b.innerHTML=o,2000);});
+}
+
+function saveHist(r,input){
+  const e={id:Date.now(),verdict:r.verdict,input:input.slice(0,80)+(input.length>80?'…':''),time:new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}),full:r};
+  hist.unshift(e);if(hist.length>10)hist.pop();
+  localStorage.setItem('tl_h',JSON.stringify(hist));renderHist();
+}
+function renderHist(){
+  const list=document.getElementById('hlist'),empty=document.getElementById('hempty');
+  if(!hist.length){empty.style.display='';list.querySelectorAll('.hitem').forEach(e=>e.remove());return;}
+  empty.style.display='none';list.innerHTML='';
+  hist.forEach(e=>{
+    const dc=e.verdict==='REAL'?'dr':e.verdict==='FAKE'?'df':'du';
+    const item=document.createElement('div');item.className='hitem';
+    item.innerHTML=`<div class="hdot ${dc}"></div><div class="htext">${e.input}</div><div class="htime">${e.time}</div>`;
+    item.addEventListener('click',()=>renderResult(e.full,e.input));list.appendChild(item);
+  });
+}
+function clearHist(){hist=[];localStorage.removeItem('tl_h');renderHist();}
+
+document.getElementById('newsHL').addEventListener('keydown',e=>{if(e.key==='Enter')analyzeNews();});
+renderHist();
+</script>
+</body>
+</html>
