@@ -471,6 +471,16 @@ textarea::placeholder, input::placeholder { color: var(--ink3); }
 .du { background: #d97706; }
 .htext { flex: 1; font-size: 0.82rem; color: var(--ink2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .htime { font-size: 0.7rem; color: var(--ink3); white-space: nowrap; }
+.hist-del {
+  background: none; border: none; cursor: pointer;
+  width: 24px; height: 24px; border-radius: 6px;
+  display: grid; place-items: center;
+  color: var(--ink3); font-size: 0.75rem;
+  flex-shrink: 0; opacity: 0;
+  transition: opacity 0.18s, background 0.18s, color 0.18s;
+}
+.hist-item:hover .hist-del { opacity: 1; }
+.hist-del:hover { background: var(--red-bg); color: var(--red); }
 
 .hist-empty {
   padding: 32px 20px; text-align: center;
@@ -865,10 +875,36 @@ function renderHist() {
     const hc = e.verdict === 'REAL' ? 'hreal' : e.verdict === 'FAKE' ? 'hfake' : 'hunc';
     const item = document.createElement('div'); item.className = `hist-item ${hc}`;
     item.style.opacity = '0'; item.style.transform = 'translateX(-8px)';
-    item.innerHTML = `<div class="hdot ${dc}"></div><div class="htext">${e.input}</div><div class="htime">${e.time}</div>`;
-    item.addEventListener('click', () => renderResult(e.full, e.input)); list.appendChild(item);
+    item.innerHTML = `
+      <div class="hdot ${dc}"></div>
+      <div class="htext">${e.input}</div>
+      <div class="htime">${e.time}</div>
+      <button class="hist-del" title="Delete this check" onclick="deleteHist(event, ${e.id})">✕</button>
+    `;
+    item.addEventListener('click', () => renderResult(e.full, e.input));
+    list.appendChild(item);
     setTimeout(() => { item.style.transition = 'opacity 0.4s, transform 0.4s'; item.style.opacity = '1'; item.style.transform = ''; }, i * 60);
   });
+}
+function deleteHist(evt, id) {
+  evt.stopPropagation();
+  const item = evt.target.closest('.hist-item');
+  item.style.transition = 'opacity 0.25s, transform 0.25s, max-height 0.35s 0.2s, margin 0.35s 0.2s, padding 0.35s 0.2s';
+  item.style.opacity = '0';
+  item.style.transform = 'translateX(12px)';
+  item.style.maxHeight = item.offsetHeight + 'px';
+  setTimeout(() => {
+    item.style.maxHeight = '0';
+    item.style.marginBottom = '0';
+    item.style.paddingTop = '0';
+    item.style.paddingBottom = '0';
+    item.style.overflow = 'hidden';
+  }, 220);
+  setTimeout(() => {
+    hist = hist.filter(h => h.id !== id);
+    localStorage.setItem('tl_h3', JSON.stringify(hist));
+    renderHist();
+  }, 580);
 }
 function clearHist() { hist = []; localStorage.removeItem('tl_h3'); renderHist(); }
 
