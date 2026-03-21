@@ -727,7 +727,7 @@ body .page, body footer { transition: opacity 0.5s 0.1s; }
 </div>
 
 <footer>
-  TruthLens · <b>Made BY-D.Shanmukh,G.Sahith</b> · AI-powered fact checking<br>
+  TruthLens · Built with care · AI-powered fact checking<br>
   <a href="#">Privacy</a> · Not a substitute for professional journalism
 </footer>
 
@@ -875,10 +875,26 @@ async function analyzeNews() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ content })
     });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Server error');
+
+    const raw = await res.text();
+    let data;
+    try {
+      data = JSON.parse(raw);
+    } catch (e) {
+      const s = raw.indexOf('{'), en = raw.lastIndexOf('}');
+      if (s !== -1 && en !== -1) {
+        try { data = JSON.parse(raw.slice(s, en + 1)); }
+        catch (e2) { throw new Error('Could not parse response. Please try again.'); }
+      } else {
+        throw new Error('Invalid server response. Please try again.');
+      }
+    }
+
+    if (!res.ok) throw new Error((data && data.error) || 'Server error ' + res.status);
+    if (!data || !data.verdict) throw new Error('Incomplete response. Please try again.');
+
     stopLoader();
-    setTimeout(() => {
+    setTimeout(function() {
       document.getElementById('loader').classList.remove('show');
       document.getElementById('analyzeBtn').classList.remove('loading');
       renderResult(data, content);
@@ -888,7 +904,7 @@ async function analyzeNews() {
     document.getElementById('loader').classList.remove('show');
     document.getElementById('analyzeBtn').classList.remove('loading');
     stopLoader();
-    showErr(err.message || 'Analysis failed. Please try again.');
+    showErr((err && err.message) || 'Analysis failed. Please try again.');
   }
 }
 
