@@ -34,10 +34,16 @@ Rules: verdict must be REAL, FAKE, or UNCERTAIN. Replace all example values with
     if (!response.ok) return res.status(502).json({ error: data.error?.message || "Groq API error" });
 
     const raw = data.choices?.[0]?.message?.content || "";
-    const match = raw.replace(/```json|```/g, "").trim().match(/\{[\s\S]*\}/);
-    if (!match) return res.status(502).json({ error: "Could not parse response." });
-    return res.status(200).json(JSON.parse(match[0]));
-
+const cleaned = raw.replace(/```json|```/g, "").trim();
+const match = cleaned.match(/\{[\s\S]*\}/);
+if (!match) return res.status(502).json({ error: "Could not parse response." });
+const fixedJson = match[0].replace(/[\x00-\x1F\x7F]/g, (c) => {
+  if (c === '\n') return '\\n';
+  if (c === '\r') return '\\r';
+  if (c === '\t') return '\\t';
+  return '';
+});
+return res.status(200).json(JSON.parse(fixedJson));
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
