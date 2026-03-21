@@ -1,4 +1,4 @@
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
@@ -39,15 +39,15 @@ Respond with exactly this JSON structure:
 Use verdict REAL if confirmed, FAKE if debunked, UNCERTAIN if unclear. Replace all values with your actual analysis.`;
 
   try {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${KEY}`;
-    
+    const url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=" + KEY;
+
     const geminiRes = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { 
-          temperature: 0.1, 
+        generationConfig: {
+          temperature: 0.1,
           maxOutputTokens: 1000
         }
       })
@@ -56,17 +56,23 @@ Use verdict REAL if confirmed, FAKE if debunked, UNCERTAIN if unclear. Replace a
     const data = await geminiRes.json();
 
     if (!geminiRes.ok) {
-      return res.status(502).json({ 
-        error: data.error?.message || "Gemini API error" 
+      return res.status(502).json({
+        error: data.error?.message || "Gemini API error"
       });
     }
 
     const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
     const cleaned = raw.replace(/```json/g, "").replace(/```/g, "").trim();
     const match = cleaned.match(/\{[\s\S]*\}/);
-    
+
     if (!match) {
-      return res.status(502).json({ error: "Could not parse AI response. Try again." });
+      return res.status(502).json({ error: "Could not parse AI response." });
     }
 
-    const result = JSON.parse
+    const result = JSON.parse(match[0]);
+    return res.status(200).json(result);
+
+  } catch (err) {
+    return res.status(500).json({ error: err.message || "Server error" });
+  }
+};
