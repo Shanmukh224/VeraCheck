@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>TruthLens — AI Fact Checker</title>
+<title>VeraCheck — AI Fact Checker</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400;1,600&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet"/>
 <style>
 :root {
@@ -589,9 +589,9 @@ body .page, body footer { transition: opacity 0.5s 0.1s; }
 <!-- Splash Screen -->
 <div id="splash">
   <div class="splash-center">
-    <img class="splash-icon" id="splashIcon" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIiBmaWxsPSJub25lIj4KICA8IS0tIE91dGVyIGNpcmNsZSByaW5nIC0tPgogIDxjaXJjbGUgY3g9IjUwIiBjeT0iNTAiIHI9IjQyIiBzdHJva2U9IiMxYzE5MTciIHN0cm9rZS13aWR0aD0iNCIgZmlsbD0ibm9uZSIvPgogIDwhLS0gU3dvb3NoIGFjY2VudCBhcmNzIC0tPgogIDxwYXRoIGQ9Ik0gMTggMjggUSA4IDUwIDE4IDcyIiBzdHJva2U9IiMxYzE5MTciIHN0cm9rZS13aWR0aD0iMy41IiBmaWxsPSJub25lIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4KICA8cGF0aCBkPSJNIDgyIDI4IFEgOTIgNTAgODIgNzIiIHN0cm9rZT0iIzFjMTkxNyIgc3Ryb2tlLXdpZHRoPSIzLjUiIGZpbGw9Im5vbmUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgogIDwhLS0gQ2VudHJhbCB1cHdhcmQgYXJyb3cgYm9keSAoc3RlbSkgLS0+CiAgPHJlY3QgeD0iNDQiIHk9IjU4IiB3aWR0aD0iMTIiIGhlaWdodD0iMTgiIGZpbGw9IiMxYzE5MTciIHJ4PSIxIi8+CiAgPCEtLSBBcnJvdyBoZWFkIHRyaWFuZ2xlIC0tPgogIDxwb2x5Z29uIHBvaW50cz0iNTAsMTggMzAsNTggNzAsNTgiIGZpbGw9IiMxYzE5MTciLz4KICA8IS0tIElubmVyIGZhY2V0IGxpbmVzIG9uIGFycm93aGVhZCBmb3IgZGVwdGggLS0+CiAgPGxpbmUgeDE9IjUwIiB5MT0iMTgiIHgyPSI1MCIgeTI9IjU4IiBzdHJva2U9IiNmNWYwZTgiIHN0cm9rZS13aWR0aD0iMS41IiBvcGFjaXR5PSIwLjUiLz4KICA8bGluZSB4MT0iNTAiIHkxPSIzNiIgeDI9IjMwIiB5Mj0iNTgiIHN0cm9rZT0iI2Y1ZjBlOCIgc3Ryb2tlLXdpZHRoPSIxIiBvcGFjaXR5PSIwLjMiLz4KPC9zdmc+" alt="TruthLens icon"/>
+    <img class="splash-icon" id="splashIcon" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIiBmaWxsPSJub25lIj4KICA8Y2lyY2xlIGN4PSI1MCIgY3k9IjUwIiByPSI0NCIgc3Ryb2tlPSIjMWMxOTE3IiBzdHJva2Utd2lkdGg9IjUiLz4KICA8Y2lyY2xlIGN4PSI1MCIgY3k9IjUwIiByPSIzNiIgc3Ryb2tlPSIjMWMxOTE3IiBzdHJva2Utd2lkdGg9IjEuNSIgb3BhY2l0eT0iMC4yNSIvPgogIDxwb2x5bGluZSBwb2ludHM9IjI4LDQ1IDQ0LDY0IDcyLDMyIiBzdHJva2U9IiMxYzE5MTciIHN0cm9rZS13aWR0aD0iNyIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+Cjwvc3ZnPg==" alt="VeraCheck icon"/>
     <div class="splash-wordmark" id="splashWord">
-      <div class="splash-wordmark-inner">TruthLens</div>
+      <div class="splash-wordmark-inner">VeraCheck</div>
     </div>
     <div class="splash-sub" id="splashSub">AI Fact Checker</div>
   </div>
@@ -602,8 +602,8 @@ body .page, body footer { transition: opacity 0.5s 0.1s; }
 
   <header>
     <a class="logo" href="#">
-      <img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIiBmaWxsPSJub25lIj4KICA8IS0tIE91dGVyIGNpcmNsZSByaW5nIC0tPgogIDxjaXJjbGUgY3g9IjUwIiBjeT0iNTAiIHI9IjQyIiBzdHJva2U9IiMxYzE5MTciIHN0cm9rZS13aWR0aD0iNCIgZmlsbD0ibm9uZSIvPgogIDwhLS0gU3dvb3NoIGFjY2VudCBhcmNzIC0tPgogIDxwYXRoIGQ9Ik0gMTggMjggUSA4IDUwIDE4IDcyIiBzdHJva2U9IiMxYzE5MTciIHN0cm9rZS13aWR0aD0iMy41IiBmaWxsPSJub25lIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4KICA8cGF0aCBkPSJNIDgyIDI4IFEgOTIgNTAgODIgNzIiIHN0cm9rZT0iIzFjMTkxNyIgc3Ryb2tlLXdpZHRoPSIzLjUiIGZpbGw9Im5vbmUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgogIDwhLS0gQ2VudHJhbCB1cHdhcmQgYXJyb3cgYm9keSAoc3RlbSkgLS0+CiAgPHJlY3QgeD0iNDQiIHk9IjU4IiB3aWR0aD0iMTIiIGhlaWdodD0iMTgiIGZpbGw9IiMxYzE5MTciIHJ4PSIxIi8+CiAgPCEtLSBBcnJvdyBoZWFkIHRyaWFuZ2xlIC0tPgogIDxwb2x5Z29uIHBvaW50cz0iNTAsMTggMzAsNTggNzAsNTgiIGZpbGw9IiMxYzE5MTciLz4KICA8IS0tIElubmVyIGZhY2V0IGxpbmVzIG9uIGFycm93aGVhZCBmb3IgZGVwdGggLS0+CiAgPGxpbmUgeDE9IjUwIiB5MT0iMTgiIHgyPSI1MCIgeTI9IjU4IiBzdHJva2U9IiNmNWYwZTgiIHN0cm9rZS13aWR0aD0iMS41IiBvcGFjaXR5PSIwLjUiLz4KICA8bGluZSB4MT0iNTAiIHkxPSIzNiIgeDI9IjMwIiB5Mj0iNTgiIHN0cm9rZT0iI2Y1ZjBlOCIgc3Ryb2tlLXdpZHRoPSIxIiBvcGFjaXR5PSIwLjMiLz4KPC9zdmc+" alt="TruthLens" style="width:28px;height:28px;object-fit:contain;transition:transform 0.3s cubic-bezier(0.34,1.56,0.64,1);"/>
-      <span class="logo-text">TruthLens</span>
+      <img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIiBmaWxsPSJub25lIj4KICA8Y2lyY2xlIGN4PSI1MCIgY3k9IjUwIiByPSI0NCIgc3Ryb2tlPSIjMWMxOTE3IiBzdHJva2Utd2lkdGg9IjUiLz4KICA8Y2lyY2xlIGN4PSI1MCIgY3k9IjUwIiByPSIzNiIgc3Ryb2tlPSIjMWMxOTE3IiBzdHJva2Utd2lkdGg9IjEuNSIgb3BhY2l0eT0iMC4yNSIvPgogIDxwb2x5bGluZSBwb2ludHM9IjI4LDQ1IDQ0LDY0IDcyLDMyIiBzdHJva2U9IiMxYzE5MTciIHN0cm9rZS13aWR0aD0iNyIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+Cjwvc3ZnPg==" alt="VeraCheck" style="width:28px;height:28px;object-fit:contain;transition:transform 0.3s cubic-bezier(0.34,1.56,0.64,1);"/>
+      <span class="logo-text">VeraCheck</span>
     </a>
     <div class="header-right">
       <div class="status-pill">
@@ -727,7 +727,7 @@ body .page, body footer { transition: opacity 0.5s 0.1s; }
 </div>
 
 <footer>
-  TruthLens · <b>Made by-D.Shanmukh,G.Sahith</b> · AI-powered fact checking<br>
+  VeraCheck · Built with care · AI-powered fact checking<br>
   <a href="#">Privacy</a> · Not a substitute for professional journalism
 </footer>
 
@@ -948,7 +948,7 @@ function renderResult(r, input) {
 function again() { clearAll(); window.scrollTo({ top: 0, behavior: 'smooth' }); }
 function copyRes() {
   if (!curResult) return;
-  const t = `TruthLens Result\nVerdict: ${curResult.verdict} (${curResult.confidence}%)\n\n${curResult.summary}\n\nFindings:\n${curResult.findings}\n\nSources: ${(curResult.sources || []).join(', ')}`;
+  const t = `VeraCheck Result\nVerdict: ${curResult.verdict} (${curResult.confidence}%)\n\n${curResult.summary}\n\nFindings:\n${curResult.findings}\n\nSources: ${(curResult.sources || []).join(', ')}`;
   navigator.clipboard.writeText(t).then(() => {
     const b = event.target.closest('button'); const o = b.innerHTML;
     b.innerHTML = '✓ Copied!'; setTimeout(() => b.innerHTML = o, 2000);
