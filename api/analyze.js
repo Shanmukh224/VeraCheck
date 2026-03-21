@@ -9,11 +9,13 @@ module.exports = async function handler(req, res) {
   const KEY = process.env.GEMINI_API_KEY;
   if (!KEY) return res.status(500).json({ error: "API key not configured." });
 
-  const models = [
+const models = [
     "gemini-2.0-flash-lite",
-    "gemini-1.5-flash",
-    "gemini-1.5-flash-8b",
-    "gemini-1.5-pro"
+    "gemini-2.0-flash-exp",
+    "gemini-1.5-flash-002",
+    "gemini-1.5-flash-001",
+    "gemini-1.5-pro-002",
+    "gemini-1.5-pro-001"
   ];
 
   const prompt = `Analyze this news claim and respond ONLY with raw JSON, no markdown:
