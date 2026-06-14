@@ -1,0 +1,14 @@
+{
+  "name": "veracheck",
+  "version": "1.0.0",
+  "description": "VeraCheck — AI-Powered Fake News Detector",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "vercel dev"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2"
+  }
+}
