@@ -8,7 +8,7 @@
 
 ## What is VeraCheck?
 
-VeraCheck is a web application that uses artificial intelligence to detect misinformation and fake news. It combines live Google Search with a powerful large language model to analyze news claims and classify them as **REAL**, **FAKE**, or **UNCERTAIN** — all in under 8 seconds. 
+VeraCheck is a web application that uses artificial intelligence to detect misinformation and fake news. It combines live Google Search with a powerful large language model to analyze news claims and classify them as **REAL**, **FAKE**, or **UNCERTAIN** — all in under 8 seconds. mg
 
 The platform features comprehensive credibility metrics, claim extraction, community voting, an interactive educational quiz, and a live explore feed of trending checks.
 
