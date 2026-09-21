@@ -44,6 +44,35 @@ app.get('/api/weather', async (req, res) => {
   }
 });
 
+// DevOps Health Check endpoint (for Docker & Jenkins smoke tests)
+app.get('/api/health', (req, res) => {
+  res.status(200).json({ status: 'ok', timestamp: new Date().toISOString(), uptime: process.uptime() });
+});
+
+// System Observability & DevOps Metrics endpoint
+app.get('/api/metrics', async (req, res) => {
+  try {
+    delete require.cache[require.resolve('./api/metrics.js')];
+    const handler = require('./api/metrics.js');
+    await handler(req, res);
+  } catch (err) {
+    console.error("Error in metrics handler:", err);
+    res.status(500).json({ error: err.message || "Failed to retrieve metrics" });
+  }
+});
+
+// News Article URL Scraper endpoint
+app.post('/api/scrape', async (req, res) => {
+  try {
+    delete require.cache[require.resolve('./api/scrape.js')];
+    const handler = require('./api/scrape.js');
+    await handler(req, res);
+  } catch (err) {
+    console.error("Error in scrape handler:", err);
+    res.status(500).json({ error: err.message || "Failed to scrape URL" });
+  }
+});
+
 // Fallback to serve index.html for SPA routing
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));

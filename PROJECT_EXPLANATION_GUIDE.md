@@ -49,6 +49,9 @@ Explain the data flow across the 3 primary layers:
 ### B. Application & Logic Layer (Backend Server)
 - **Node.js & Express / Vercel Serverless Architecture:**
   - `POST /api/analyze`: Coordinates search grounding, claim extraction, LLM prompt engineering, response sanitization, and fallback recovery.
+  - `POST /api/scrape`: Secure news link scraper extracting OpenGraph metadata, article titles, and clean article paragraphs.
+  - `GET /api/metrics`: Live DevOps and system telemetry exposing memory footprint (RSS/heap), uptime, model fallback status, and Docker/Jenkins metadata.
+  - `GET /api/health`: Heartbeat health check endpoint for container orchestrators and CI/CD smoke test pipelines.
   - `GET /api/weather`: Interfaces with Open-Meteo and reverse geocoding to determine local weather and map WMO weather codes to canvas states.
   - `GET /api/firebase-config`: Provides Firebase configuration parameters to client scripts without hardcoding secrets in static files.
 
@@ -137,6 +140,26 @@ Explain the data flow across the 3 primary layers:
 - Integrates with **Firebase Firestore**.
 - Verified claims are stored in a global feed where users can upvote, downvote, or vote "Agree" / "Disagree" with the AI verdict, creating a consensus mechanism.
 
+### Feature 5: Voice Fact-Checking (Speech-to-Text)
+- Utilizes the browser's native **Web Speech API** (`SpeechRecognition` / `webkitSpeechRecognition`).
+- Enables voice-driven claim verification with automatic language localization (English, Spanish, French, Hindi, German), live audio pulse animation, and direct transcript routing into the active input.
+
+### Feature 6: Forensic Fact-Check Report & PDF Certificate Exporter
+- Generates a formal, printable **Verification Certificate** complete with digital verification seal, credibility scores, source consensus, bias radar, and corroborating citations.
+- Uses specialized `@media print` CSS rules so users can click **"Print / Save as PDF"** to produce an official fact-checking dossier.
+
+### Feature 7: News URL Auto-Scraper & Metadata Ingestion
+- Real-time regex detection identifies when a user pastes a URL into the headline or article inputs.
+- A smart detection banner slides down offering one-click **"Auto-Extract Content"**, calling `/api/scrape` to fetch OpenGraph metadata and article body text while stripping boilerplate HTML.
+
+### Feature 8: WhatsApp "Rumor Buster" Debunk Rebuttal Generator
+- Generates polite, authoritative, and emoji-formatted WhatsApp counter-messages citing verified sources and explaining falsehoods.
+- Features a one-tap copy button with instant toast notification, specifically designed to help citizens debunk viral rumors in family and community messaging groups.
+
+### Feature 9: DevOps & System Health Observability Dashboard
+- Live modal accessible via the header's "Operational" indicator pill or the footer link.
+- Connects to `/api/metrics` to display live server uptime, process RSS/Heap memory footprint, Node.js version, Groq model fallback status, Serper search status, and Jenkins CI/CD pipeline details.
+
 ---
 
 ## 6. Deep-Dive Technical Innovations
@@ -162,22 +185,30 @@ Follow this order during your live demo for maximum impact:
 1. **Open the Homepage (`http://localhost:3000`):**
    - Point out the clean, modern glassmorphic interface and the subtle background particle animation.
    - Show the **Live Weather Pill** in the header displaying your current location, temperature, and atmospheric icon.
-2. **Fact-Check a Known False Claim:**
-   - Type: *"NASA discovered alien pyramids on the dark side of the Moon."*
+   - Click the green **"Operational"** status pill in the header to pop open the **DevOps & System Metrics Dashboard**, showing live memory, model health, and CI/CD status.
+2. **Demonstrate News URL Auto-Scraping:**
+   - Paste a news link into the article box (e.g. Wikipedia or BBC).
+   - Observe the **"News URL Detected"** banner slide down automatically.
+   - Click **"Auto-Extract Content"** to show instant body extraction and word count updating.
+3. **Fact-Check a Known False Claim via Voice or Text:**
+   - Type or speak: *"NASA discovered alien pyramids on the dark side of the Moon."*
    - Click **"Verify Claim"**.
    - Show the loading spinner and explain that Google Serper is searching the web while Groq LPU is analyzing.
    - Reveal the verdict: **FAKE**, confidence score ~95%, contradictory points, and authentic Google Search links showing debunking articles.
-3. **Fact-Check a Complex Article:**
+4. **Demonstrate WhatsApp "Rumor Buster" & PDF Certificate:**
+   - Click **"WhatsApp Debunk"** in the result card to copy a ready-to-share WhatsApp counter-message.
+   - Click **"Export Report"** to open the high-resolution **Verification Certificate** modal with its digital seal and bias radar, ready to print or save as PDF.
+5. **Fact-Check a Complex Article:**
    - Paste a news paragraph into the **"Extract Claims"** tab.
    - Show how the AI automatically separates the paragraph into 3 distinct claims.
    - Click on one extracted claim to trigger an instant verification.
-4. **Demonstrate Community Trends & Voting:**
+6. **Demonstrate Community Trends & Voting:**
    - Scroll down to the **Global Trends** section.
    - Click **"Agree"** or **"Disagree"** on an item to demonstrate real-time Firebase Firestore updates.
-5. **Showcase the Interactive Quiz:**
+7. **Showcase the Interactive Quiz:**
    - Open the **Quiz** tab and answer a question to show the instant educational explanation.
-6. **Showcase the DevOps Pipeline:**
-   - Open your terminal or Jenkins dashboard to show the **Docker container** running and explain the **Jenkinsfile** stages.
+8. **Showcase the DevOps Pipeline:**
+   - Open your terminal or Jenkins dashboard to show the **Docker container** running and explain the **Jenkinsfile** 7 automated stages.
 
 ---
 
@@ -197,6 +228,14 @@ Follow this order during your live demo for maximum impact:
 
 ### Q5: How are credentials and API keys kept secure?
 > **Answer:** All sensitive API keys (Groq, Serper, Firebase private keys) are stored in server-side environment variables (`.env`). The `.env` file is explicitly ignored in `.gitignore` and `.dockerignore` so it is never pushed to public Git repositories. The client application only accesses backend endpoints via secure REST calls.
+
+### Q6: How does the system handle observability and container health monitoring?
+> **Answer:** VeraCheck implements two production-grade DevOps endpoints:
+> - `GET /api/health`: Provides a sub-millisecond heartbeat returning service status and uptime for container health probes and Jenkins stage 7 verification.
+> - `GET /api/metrics`: Delivers structured telemetry including Node.js memory consumption (RSS, Heap Used, Heap Total), OS platform/PID, primary LLM status, search engine connectivity, and active Docker/Jenkins orchestrations, viewable directly within the client UI.
+
+### Q7: How does the News URL scraper prevent vulnerabilities and handle extraction?
+> **Answer:** In `api/scrape.js`, URLs are validated against strict protocols (`http`/`https`). Outbound HTTP requests enforce an `AbortController` timeout (10 seconds) and set a realistic `User-Agent` header to prevent hanging connections. The extractor targets OpenGraph `<meta property="og:title">` and semantic `<article>` and `<p>` tags, stripping scripts and boilerplate navigation before truncating to 4,000 characters for optimal LLM context ingestion.
 
 ---
 *Created for the VeraCheck Engineering Team. Good luck with your project presentation! 🚀*

@@ -26,3 +26,4 @@ yarn-error.log*
 Thumbs.db
 ehthumbs.db
 Desktop.ini
+reset-jenkins.ps1

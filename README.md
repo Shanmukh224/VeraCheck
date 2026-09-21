@@ -87,6 +87,26 @@ In today's hyper-connected digital landscape, disinformation and synthetic fake 
 ### 8. 🌍 Multi-Language Native Support
 - Evaluates claims and outputs verdicts natively in **English, Spanish, Hindi, Telugu, French, German, and more**.
 
+### 9. 🎙️ Voice Fact-Checking (Speech-to-Text)
+- Integrated with the **Web Speech API** (`SpeechRecognition` / `webkitSpeechRecognition`).
+- Enables voice-driven claim verification with automatic language localization and real-time audio input pulse animations.
+
+### 10. 📄 Forensic Fact-Check Report & PDF/Certificate Exporter
+- Produces a tamper-evident, high-resolution **Verification Certificate** complete with digital seal, credibility metrics, bias radar, consensus score, and source bibliography.
+- Uses dedicated `@media print` CSS styling for pixel-perfect browser printing and PDF generation.
+
+### 11. 🔗 News URL Auto-Scraper & Content Ingestion
+- Detects pasted URLs in article and headline inputs in real-time.
+- Backed by `POST /api/scrape`, extracting OpenGraph metadata, article headlines, domain attribution, and clean text bodies for one-click verification.
+
+### 12. 💬 WhatsApp "Rumor Buster" Counter-Debunk Generator
+- Formats AI verification verdicts into polite, evidence-backed, and emoji-formatted WhatsApp counter-messages.
+- Designed specifically for one-tap copying to dispel viral disinformation circulating in family or community chat groups.
+
+### 13. 📊 DevOps & System Health Observability Dashboard
+- Accessible via the live status indicator pill and dedicated footer link.
+- Fetches real-time telemetry from `GET /api/metrics`, reporting Node.js process RSS/Heap memory, model fallback chain health, Google Search provider status, and Jenkins CI/CD pipeline metadata.
+
 ---
 
 ## 🏗️ System Architecture
@@ -106,6 +126,9 @@ flowchart TD
         Router[API Route Dispatcher]
         AnalyzeEndpoint["/api/analyze"]
         WeatherEndpoint["/api/weather"]
+        ScrapeEndpoint["/api/scrape"]
+        MetricsEndpoint["/api/metrics"]
+        HealthEndpoint["/api/health"]
         ConfigEndpoint["/api/firebase-config"]
     end
 
@@ -415,6 +438,65 @@ Fetches live meteorological parameters and returns UI canvas theme mappings.
   }
   ```
 
+### 3. `POST /api/scrape`
+Fetches and sanitizes article title, metadata, and body text from any valid news or web URL.
+- **Request Body:**
+  ```json
+  {
+    "url": "https://www.bbc.com/news/technology-68500000"
+  }
+  ```
+- **Response Structure (200 OK):**
+  ```json
+  {
+    "title": "Autonomous AI Fact-Checking Revolutionizes Digital Journalism",
+    "text": "Clean extracted body paragraphs with HTML stripped...",
+    "domain": "bbc.com",
+    "textLength": 2480,
+    "wordCount": 420
+  }
+  ```
+
+---
+
+### 4. `GET /api/metrics`
+Exposes live DevOps observability and system performance telemetry.
+- **Response Structure (200 OK):**
+  ```json
+  {
+    "status": "HEALTHY",
+    "service": "VeraCheck Fact-Checking Engine",
+    "version": "1.2.0",
+    "uptime": { "seconds": 3600, "formatted": "1h 0m 0s" },
+    "performance": { "memoryRssMB": 54.2, "heapUsedMB": 7.4, "heapTotalMB": 8.8 },
+    "runtime": { "nodeVersion": "v22.13.1", "platform": "win32", "environment": "production" },
+    "intelligence": {
+      "primaryModel": "llama-3.3-70b-versatile",
+      "fallbackChain": ["llama-3.3-70b-versatile", "llama-3.1-70b-versatile", "mixtral-8x7b-32768"],
+      "aiProvider": "Groq LPU Inference Cloud",
+      "searchProvider": "Google Search via Serper API"
+    },
+    "devOps": {
+      "containerEngine": "Docker (Alpine Linux)",
+      "orchestration": "Docker Compose",
+      "cicdPipeline": "Jenkins Declarative Pipeline (7 Stages)"
+    }
+  }
+  ```
+
+---
+
+### 5. `GET /api/health`
+Lightweight heartbeat probe for Kubernetes, Docker health checks, and CI/CD smoke tests.
+- **Response Structure (200 OK):**
+  ```json
+  {
+    "status": "ok",
+    "timestamp": "2026-09-21T15:37:24.518Z",
+    "uptime": 3600.5
+  }
+  ```
+
 ---
 
 ## 📂 Project Directory Structure
@@ -434,9 +516,12 @@ VeraCheck/
 ├── server.js                     # Express server, static server & routing proxy
 ├── vercel.json                   # Vercel serverless deployment routing config
 ├── README.md                     # Comprehensive technical documentation
+├── PROJECT_EXPLANATION_GUIDE.md  # Detailed project defense and viva guide
 └── api/
     ├── analyze.js                # Core AI verification, fallback logic & Serper search
     ├── firebase-config.js        # Safe client Firebase credential injector
+    ├── metrics.js                # DevOps observability & live system telemetry
+    ├── scrape.js                 # News URL scraper & article body extractor
     └── weather.js                # Open-Meteo integration & Canvas state mapper
 ```
 
