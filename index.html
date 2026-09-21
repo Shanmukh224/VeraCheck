@@ -4568,6 +4568,53 @@ function switchTab(t, el) {
   document.getElementById('tab-' + t).classList.add('active');
   updateCount();
 }
+// ── Global Helper Utilities ──
+let toastTimeout = null;
+function showToast(msg) {
+  let toast = document.getElementById('globalToast');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = 'globalToast';
+    toast.className = 'weather-toast';
+    document.body.appendChild(toast);
+  }
+  toast.textContent = msg;
+  toast.classList.add('show');
+  if (toastTimeout) clearTimeout(toastTimeout);
+  toastTimeout = setTimeout(() => {
+    if (toast) toast.classList.remove('show');
+  }, 4000);
+}
+
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function fallbackCopy(text) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed';
+  ta.style.top = '0';
+  ta.style.left = '0';
+  ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.focus();
+  ta.select();
+  try {
+    document.execCommand('copy');
+    showToast('💬 WhatsApp Debunk Message copied! Ready to paste in your group chat.');
+  } catch (e) {
+    showToast('⚠️ Could not copy message to clipboard.');
+  }
+  document.body.removeChild(ta);
+}
+
 let detectedUrl = null;
 
 function updateCount() {
@@ -4593,13 +4640,17 @@ function updateCount() {
     }
   }
 
-  // URL Auto-Detection
-  const urlMatch = currentVal.match(/https?:\/\/[^\s]+/i);
+  // URL Auto-Detection (matches https://, http://, or www. links)
+  const urlMatch = currentVal.match(/(https?:\/\/[^\s]+|www\.[a-zA-Z0-9-]+\.[a-zA-Z]{2,}[^\s]*)/i);
   const banner = document.getElementById('urlDetectionBanner');
   const bannerHl = document.getElementById('urlDetectionBannerHl');
 
   if (urlMatch) {
-    detectedUrl = urlMatch[0];
+    let rawUrl = urlMatch[0];
+    if (!/^https?:\/\//i.test(rawUrl)) {
+      rawUrl = 'https://' + rawUrl;
+    }
+    detectedUrl = rawUrl;
     try {
       const parsed = new URL(detectedUrl);
       const domain = parsed.hostname.replace(/^www\./i, '');
@@ -4622,9 +4673,12 @@ function updateCount() {
 }
 
 async function extractFromDetectedUrl(tabType = 'text') {
-  if (!detectedUrl) return;
+  if (!detectedUrl) {
+    showToast('⚠️ No valid URL detected in input.');
+    return;
+  }
 
-  const btn = event && event.target ? event.target : null;
+  const btn = (typeof window !== 'undefined' && window.event && window.event.target) ? window.event.target : null;
   const originalHtml = btn ? btn.innerHTML : '';
   if (btn) {
     btn.innerHTML = '⏳ Extracting...';
@@ -4646,18 +4700,28 @@ async function extractFromDetectedUrl(tabType = 'text') {
       return;
     }
 
+    const textToInsert = data.content || data.text || '';
     if (tabType === 'hl') {
       const hlInput = document.getElementById('newsHL');
       if (hlInput) hlInput.value = data.title;
       const textInput = document.getElementById('newsText');
-      if (textInput) textInput.value = `${data.title}\n\n${data.content}`;
+      if (textInput) {
+        textInput.value = `${data.title}\n\n${textToInsert}`;
+        textInput.style.height = 'auto';
+        textInput.style.height = Math.max(164, textInput.scrollHeight) + 'px';
+      }
     } else {
       const textInput = document.getElementById('newsText');
-      if (textInput) textInput.value = `${data.title}\n\n${data.content}`;
+      if (textInput) {
+        textInput.value = `${data.title}\n\n${textToInsert}`;
+        textInput.style.height = 'auto';
+        textInput.style.height = Math.max(164, textInput.scrollHeight) + 'px';
+      }
     }
 
+    detectedUrl = null;
     updateCount();
-    showToast(`✅ Extracted: "${data.title.slice(0, 40)}..." (${data.wordCount} words)`);
+    showToast(`✅ Extracted: "${(data.title || 'Article').slice(0, 35)}..." (${data.wordCount || 0} words)`);
 
     const banner = document.getElementById('urlDetectionBanner');
     const bannerHl = document.getElementById('urlDetectionBannerHl');
@@ -4726,7 +4790,11 @@ function toggleSpeech() {
         if (input) input.value = transcript;
       } else {
         const input = document.getElementById('newsText');
-        if (input) input.value = transcript;
+        if (input) {
+          input.value = transcript;
+          input.style.height = 'auto';
+          input.style.height = Math.max(164, input.scrollHeight) + 'px';
+        }
       }
       updateCount();
     };
@@ -4816,7 +4884,10 @@ function exportPDF() {
 }
 
 function openReportModal() {
-  if (!curResult) return;
+  if (!curResult) {
+    showToast('⚠️ Please verify a claim first before exporting a report.');
+    return;
+  }
   const modal = document.getElementById('reportModal');
   if (!modal) return;
 
@@ -4927,6 +4998,20 @@ function closeMetricsModal() {
   const modal = document.getElementById('metricsModal');
   if (modal) modal.classList.remove('active');
 }
+
+// Bind feature functions immediately to window scope
+window.showToast = showToast;
+window.escapeHtml = escapeHtml;
+window.fallbackCopy = fallbackCopy;
+window.openMetricsModal = openMetricsModal;
+window.closeMetricsModal = closeMetricsModal;
+window.openReportModal = openReportModal;
+window.closeReportModal = closeReportModal;
+window.printReport = printReport;
+window.exportPDF = exportPDF;
+window.copyWhatsAppDebunk = copyWhatsAppDebunk;
+window.extractFromDetectedUrl = extractFromDetectedUrl;
+window.toggleSpeech = toggleSpeech;
 
 async function extractClaims() {
   const content = document.getElementById('newsText').value.trim();
@@ -7218,17 +7303,6 @@ window.sendPhoneOTP = sendPhoneOTP;
 window.verifyPhoneOTP = verifyPhoneOTP;
 window.resetPhoneAuthFlow = resetPhoneAuthFlow;
 window.handleLogout = handleLogout;
-
-// Export new feature functions to window scope
-window.openMetricsModal = openMetricsModal;
-window.closeMetricsModal = closeMetricsModal;
-window.openReportModal = openReportModal;
-window.closeReportModal = closeReportModal;
-window.printReport = printReport;
-window.exportPDF = exportPDF;
-window.copyWhatsAppDebunk = copyWhatsAppDebunk;
-window.extractFromDetectedUrl = extractFromDetectedUrl;
-window.toggleSpeech = toggleSpeech;
 
 initFirebase();
 </script>
