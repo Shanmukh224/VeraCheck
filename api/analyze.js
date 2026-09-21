@@ -1,3 +1,174 @@
+function cleanJsonString(str) {
+  let cleaned = "";
+  let inString = false;
+  let prevChar = "";
+  for (let i = 0; i < str.length; i++) {
+    const ch = str[i];
+    const code = str.charCodeAt(i);
+    if (ch === '"' && prevChar !== '\\') inString = !inString;
+    if (inString && code < 32) {
+      if (code === 9 || code === 10 || code === 13) cleaned += " ";
+    } else {
+      cleaned += ch;
+    }
+    prevChar = ch;
+  }
+  return cleaned;
+}
+
+function extractSearchQuery(text) {
+  if (!text) return "";
+  let clean = text.replace(/https?:\/\/\S+/gi, " ").trim();
+  clean = clean.replace(/^(breaking news|breaking|urgent|viral|exclusive|watch|video|rumor|news update|forwarded as received|just in|did you know that)[:\-\s]+/i, "");
+  clean = clean.replace(/["'“”‘’]/g, " ");
+  
+  // If text is long, take the first coherent statement
+  const firstSentence = clean.split(/[.\n?!]/)[0] || clean;
+  if (firstSentence.trim().length >= 15) {
+    clean = firstSentence.trim();
+  }
+  
+  return clean.slice(0, 140).replace(/\s+/g, " ").trim();
+}
+
+async function fetchLiveNewsAndWeb(searchQuery, serperKey) {
+  if (!serperKey || !searchQuery) return { context: "", sources: [] };
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 7000);
+
+  try {
+    // Run Google News and Google Search in parallel for maximum freshness and coverage
+    const [newsRes, searchRes] = await Promise.allSettled([
+      fetch("https://google.serper.dev/news", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-API-KEY": serperKey },
+        body: JSON.stringify({ q: searchQuery, num: 6 }),
+        signal: controller.signal
+      }).then(r => r.json()),
+      fetch("https://google.serper.dev/search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-API-KEY": serperKey },
+        body: JSON.stringify({ q: searchQuery, num: 6 }),
+        signal: controller.signal
+      }).then(r => r.json())
+    ]);
+
+    clearTimeout(timeoutId);
+
+    const newsResults = (newsRes.status === "fulfilled" && newsRes.value && newsRes.value.news) || [];
+    const searchResults = (searchRes.status === "fulfilled" && searchRes.value && searchRes.value.organic) || [];
+
+    const combinedSources = [];
+    const seenUrls = new Set();
+
+    // 1. Add latest Google News results first (breaking articles with live timestamps)
+    newsResults.forEach(item => {
+      if (!item.link || seenUrls.has(item.link)) return;
+      seenUrls.add(item.link);
+      let domain = "";
+      try {
+        const u = new URL(item.link);
+        domain = u.hostname.replace("www.", "");
+      } catch (e) {
+        domain = item.source || "";
+      }
+      combinedSources.push({
+        title: item.title || "",
+        link: item.link,
+        snippet: item.snippet || "",
+        date: item.date || "Latest News",
+        source: item.source || domain,
+        domain: domain || item.source || "News"
+      });
+    });
+
+    // 2. Add organic web search results (fact checks, encyclopedic & context pages)
+    searchResults.forEach(item => {
+      if (!item.link || seenUrls.has(item.link)) return;
+      seenUrls.add(item.link);
+      let domain = "";
+      try {
+        const u = new URL(item.link);
+        domain = u.hostname.replace("www.", "");
+      } catch (e) {
+        domain = "";
+      }
+      combinedSources.push({
+        title: item.title || "",
+        link: item.link,
+        snippet: item.snippet || "",
+        date: item.date || "",
+        source: domain,
+        domain: domain
+      });
+    });
+
+    const context = combinedSources.map((s, i) => {
+      const dateInfo = s.date ? ` [Date: ${s.date}]` : "";
+      const sourceInfo = s.source ? ` (${s.source})` : "";
+      return `Source ${i + 1}${sourceInfo}${dateInfo}:\nTitle: ${s.title}\nSnippet: ${s.snippet}`;
+    }).join("\n\n");
+
+    return { context, sources: combinedSources.slice(0, 8) };
+  } catch (err) {
+    clearTimeout(timeoutId);
+    return { context: "", sources: [] };
+  }
+}
+
+async function callGroqWithFallback(groqKey, messages, maxTokens = 1000, temperature = 0.1) {
+  const models = [
+    process.env.GROQ_MODEL,
+    "openai/gpt-oss-120b",
+    "qwen/qwen3.8-27b",
+    "openai/gpt-oss-20b"
+  ].filter(Boolean);
+  
+  const uniqueModels = Array.from(new Set(models));
+  let lastError = null;
+
+  for (const model of uniqueModels) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 12000);
+
+      const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer " + groqKey
+        },
+        body: JSON.stringify({
+          model: model,
+          messages: messages,
+          temperature: temperature,
+          max_tokens: maxTokens
+        }),
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+      const data = await response.json();
+
+      if (response.ok && data.choices && data.choices[0] && data.choices[0].message) {
+        return {
+          content: data.choices[0].message.content || "",
+          modelUsed: model
+        };
+      }
+
+      if (data.error && data.error.message) {
+        lastError = new Error(data.error.message);
+      }
+    } catch (err) {
+      lastError = err;
+    }
+  }
+
+  throw lastError || new Error("Failed to get a response from AI models.");
+}
+
 module.exports = async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
@@ -13,7 +184,7 @@ module.exports = async function handler(req, res) {
 
   const GROQ_KEY = process.env.GROQ_API_KEY;
   const SERPER_KEY = process.env.SERPER_API_KEY;
-  if (!GROQ_KEY) return res.status(500).json({ error: "API key not configured." });
+  if (!GROQ_KEY) return res.status(500).json({ error: "API key not configured in .env." });
 
   // ----------------------------------------------------
   // ACTION 1: Claims Extraction
@@ -24,50 +195,37 @@ module.exports = async function handler(req, res) {
     }
 
     const prompt = [
-      'You are an expert editor. Extract the 3 to 5 main factual claims from the provided text that can be independently verified. Do not extract opinions or generic thoughts.',
+      'You are an expert editor. Extract 3 to 5 core factual claims from the provided text that can be independently verified. Do not extract subjective opinions or vague thoughts.',
       '',
       'TEXT:',
       '"' + content.slice(0, 4000) + '"',
       '',
-      'You MUST respond with ONLY a single raw JSON array of strings in the ' + language + ' language. No markdown, no backticks, no explanations. Example:',
+      'You MUST respond with ONLY a single raw JSON array of strings in ' + language + '. No markdown, no backticks, no explanations. Example:',
       '["Claim 1", "Claim 2", "Claim 3"]'
     ].join('\n');
 
     try {
-      const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": "Bearer " + GROQ_KEY
-        },
-        body: JSON.stringify({
-          model: "llama-3.3-70b-versatile",
-          messages: [
-            {
-              role: "system",
-              content: "You are a claim extraction helper. You ONLY output raw JSON array of strings in " + language + ". Never use markdown or backticks."
-            },
-            { role: "user", content: prompt }
-          ],
-          temperature: 0.1,
-          max_tokens: 400
-        })
-      });
+      const { content: raw } = await callGroqWithFallback(
+        GROQ_KEY,
+        [
+          {
+            role: "system",
+            content: "You are a claim extraction helper. You ONLY output raw JSON array of strings in " + language + ". Never use markdown or backticks."
+          },
+          { role: "user", content: prompt }
+        ],
+        500,
+        0.1
+      );
 
-      const groqData = await response.json();
-      if (!response.ok) {
-        return res.status(502).json({ error: groqData.error && groqData.error.message ? groqData.error.message : "Groq API error" });
-      }
-
-      let raw = groqData.choices && groqData.choices[0] && groqData.choices[0].message && groqData.choices[0].message.content ? groqData.choices[0].message.content : "";
-      raw = raw.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/i, "").trim();
-      var start = raw.indexOf("[");
-      var end = raw.lastIndexOf("]");
+      let cleanedRaw = raw.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/i, "").trim();
+      const start = cleanedRaw.indexOf("[");
+      const end = cleanedRaw.lastIndexOf("]");
       if (start === -1 || end === -1 || start >= end) {
         return res.status(502).json({ error: "Could not parse claim extraction response." });
       }
-      var jsonStr = raw.slice(start, end + 1);
-      var result = JSON.parse(jsonStr);
+      const jsonStr = cleanJsonString(cleanedRaw.slice(start, end + 1));
+      const result = JSON.parse(jsonStr);
       return res.status(200).json(result);
     } catch (err) {
       return res.status(500).json({ error: err.message || "Server error in claim extraction." });
@@ -93,7 +251,6 @@ module.exports = async function handler(req, res) {
       "Electric Vehicles & Renewable Energy"
     ];
 
-    // Shuffle and pick 3 random themes
     const selectedThemes = quizThemes
       .sort(() => 0.5 - Math.random())
       .slice(0, 3)
@@ -102,12 +259,11 @@ module.exports = async function handler(req, res) {
     const randomSeed = Math.floor(Math.random() * 1000000);
 
     const prompt = [
-      'You are an expert educator. Generate 5 unique, highly creative, and interesting news headlines (some real, some fake, some uncertain/misleading) in the following language: ' + language + '.',
-      `Focus the headlines on a mix of these random themes: ${selectedThemes}.`,
-      `Ensure the headlines are completely fresh, unique, and different from typical topics. (Random Seed context: ${randomSeed})`,
-      'For each headline, provide the correct verdict (REAL, FAKE, or UNCERTAIN) and a short 1-2 sentence explanation of why.',
+      'You are an expert media literacy educator. Generate 5 unique news headlines (some real, some fake, some uncertain/misleading) in: ' + language + '.',
+      `Mix these themes: ${selectedThemes}. (Seed: ${randomSeed})`,
+      'For each headline, provide the correct verdict (REAL, FAKE, or UNCERTAIN) and a 1-2 sentence explanation.',
       '',
-      'You MUST respond with ONLY a single raw JSON array of objects. No markdown. No backticks. No explanation. Just the JSON:',
+      'You MUST respond with ONLY a single raw JSON array of objects. No markdown. No backticks. Just the JSON:',
       '[',
       '  {"headline": "Headline 1", "verdict": "REAL", "explanation": "Explanation 1"},',
       '  {"headline": "Headline 2", "verdict": "FAKE", "explanation": "Explanation 2"}',
@@ -116,228 +272,168 @@ module.exports = async function handler(req, res) {
       'STRICT RULES:',
       '- The JSON keys (headline, verdict, explanation) must remain in English.',
       '- verdict must be exactly: REAL, FAKE, or UNCERTAIN',
-      '- The headline and explanation values must be translated and written in ' + language + '.'
+      '- The headline and explanation values must be in ' + language + '.'
     ].join('\n');
 
     try {
-      const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": "Bearer " + GROQ_KEY
-        },
-        body: JSON.stringify({
-          model: "llama-3.3-70b-versatile",
-          messages: [
-            {
-              role: "system",
-              content: "You are a quiz generator. You ONLY output raw JSON. Never use markdown, backticks, or explanation. Plain UTF-8 JSON only."
-            },
-            { role: "user", content: prompt }
-          ],
-          temperature: 0.8,
-          max_tokens: 1000
-        })
-      });
+      const { content: raw } = await callGroqWithFallback(
+        GROQ_KEY,
+        [
+          {
+            role: "system",
+            content: "You are a quiz generator. You ONLY output raw JSON. Never use markdown, backticks, or explanation."
+          },
+          { role: "user", content: prompt }
+        ],
+        1000,
+        0.7
+      );
 
-      const groqData = await response.json();
-      if (!response.ok) {
-        return res.status(502).json({ error: groqData.error && groqData.error.message ? groqData.error.message : "Groq API error" });
-      }
-
-      let raw = groqData.choices && groqData.choices[0] && groqData.choices[0].message && groqData.choices[0].message.content ? groqData.choices[0].message.content : "";
-      raw = raw.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/i, "").trim();
-      var start = raw.indexOf("[");
-      var end = raw.lastIndexOf("]");
+      let cleanedRaw = raw.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/i, "").trim();
+      const start = cleanedRaw.indexOf("[");
+      const end = cleanedRaw.lastIndexOf("]");
       if (start === -1 || end === -1 || start >= end) {
         return res.status(502).json({ error: "Could not parse quiz generation response." });
       }
-      var jsonStr = raw.slice(start, end + 1);
-      var result = JSON.parse(jsonStr);
+      const jsonStr = cleanJsonString(cleanedRaw.slice(start, end + 1));
+      const result = JSON.parse(jsonStr);
       return res.status(200).json(result);
     } catch (err) {
       return res.status(500).json({ error: err.message || "Server error in quiz generation." });
     }
   }
 
-
   // ----------------------------------------------------
-  // ACTION 3: Standard Claim/News Verification
+  // ACTION 3: Real-Time Fact-Checking Analysis (Latest & Breaking News)
   // ----------------------------------------------------
   if (!content || content.trim().length < 5) {
     return res.status(400).json({ error: "No content provided." });
   }
 
-  // Step 1: Live web search
-  let searchContext = "";
-  let searchSources = [];
-  if (SERPER_KEY) {
-    try {
-      const searchRes = await fetch("https://google.serper.dev/search", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-API-KEY": SERPER_KEY },
-        body: JSON.stringify({ q: content.slice(0, 200), num: 5 })
-      });
-      const searchData = await searchRes.json();
-      const results = searchData.organic || [];
-      searchContext = results.map(function(r, i) {
-        return "Source " + (i+1) + ": " + r.title + " - " + r.snippet;
-      }).join("\n\n");
+  // Step 1: Real-time dual search (Google News + Web Search)
+  const searchQuery = extractSearchQuery(content);
+  const { context: searchContext, sources: searchSources } = await fetchLiveNewsAndWeb(searchQuery, SERPER_KEY);
 
-      searchSources = results.map(function(r) {
-        let domain = "";
-        try {
-          const u = new URL(r.link);
-          domain = u.hostname.replace("www.", "");
-        } catch (err) {
-          domain = r.link || "";
-        }
-        return {
-          title: r.title || "",
-          link: r.link || "",
-          snippet: r.snippet || "",
-          date: r.date || "",
-          domain: domain
-        };
-      });
-    } catch (e) {
-      searchContext = "";
-      searchSources = [];
-    }
-  }
+  const today = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 
+  // Step 2: Formulate AI Prompt with Date and Real-Time News Awareness
   const prompt = [
-    'You are an expert fact-checker. Analyze this claim carefully.',
-    'You MUST translate and write the values of all textual JSON fields (title, subtitle, summary, findings, supporting, contradicting, and indicators label) in the following language: ' + language + '.',
+    'You are a premier real-time investigative fact-checker and media intelligence analyst.',
+    'CURRENT CALENDAR DATE: ' + today + '.',
     '',
-    'CLAIM: "' + content.slice(0, 2000) + '"',
+    'CRITICAL GUIDELINES FOR EVALUATING RECENT & BREAKING NEWS:',
+    '1. The real world has progressed to today (' + today + '). You must evaluate recent events, politics, sports, international affairs, and technology announcements accordingly.',
+    '2. LIVE REAL-TIME GOOGLE NEWS & WEB EVIDENCE is provided below. Treat these recent articles and news wire reports as the PRIMARY, authoritative ground truth.',
+    '3. If reputable news outlets (Reuters, AP, BBC, CNBC, CNN, NYT, official government/company press releases) report the event as having occurred, classify the claim as REAL.',
+    '4. If major fact-checking outlets or news reports explicitly debunk the claim as false, satiric, or a hoax, classify it as FAKE.',
+    '5. If the claim makes a sensational claim that would be worldwide news, yet has 0 coverage in the live search results, or if reporting is conflicting/unverified, classify it as UNCERTAIN or FAKE.',
+    '6. You MUST translate and write all text fields (title, subtitle, summary, findings, supporting, contradicting, and indicators labels) in: ' + language + '.',
     '',
-    searchContext ? ('WEB SEARCH RESULTS:\n' + searchContext + '\n\nUse these as your PRIMARY source of truth.') : 'Use your training knowledge to analyze this claim carefully.',
+    'CLAIM TO CHECK: "' + content.slice(0, 3000) + '"',
     '',
-    'You MUST respond with ONLY a single raw JSON object. No markdown. No backticks. No explanation. No newlines inside string values. Just the JSON:',
+    searchContext 
+      ? ('LIVE REAL-TIME NEWS & SEARCH RESULTS:\n' + searchContext + '\n\nCarefully analyze the titles, dates, and snippets above.') 
+      : 'No live search results available. Analyze using deep internal knowledge and logic.',
     '',
-    '{"verdict":"REAL","confidence":85,"consensus":90,"evidence":80,"bias":15,"title":"Short verdict here","subtitle":"One sentence explanation.","summary":"Two sentence summary of claim and findings.","findings":"Finding one. Finding two. Finding three.","supporting":["Supporting point one","Supporting point two"],"contradicting":["Contradicting point one"],"indicators":[{"label":"Sources verified","type":"positive"},{"label":"Consistent facts","type":"positive"},{"label":"Some uncertainty","type":"neutral"}],"mediaBias":{"left":20,"center":60,"right":20},"socialBuzz":{"velocity":40,"sentiment":"Mixed","platforms":["Twitter","Reddit"]}}',
+    'You MUST respond with ONLY a single raw JSON object. No markdown. No backticks. No newlines inside string values. JSON format:',
+    '{',
+    '  "verdict": "REAL" | "FAKE" | "UNCERTAIN",',
+    '  "confidence": 85,',
+    '  "consensus": 90,',
+    '  "evidence": 80,',
+    '  "bias": 15,',
+    '  "title": "Short decisive headline in ' + language + '",',
+    '  "subtitle": "One clear sentence explaining the verdict in ' + language + '",',
+    '  "summary": "Concise 2-3 sentence overview of the claim and verification in ' + language + '",',
+    '  "findings": "Key finding one. Key finding two. Key finding three.",',
+    '  "supporting": ["Supporting evidence point 1", "Supporting evidence point 2"],',
+    '  "contradicting": ["Contradicting/debunking point 1"],',
+    '  "indicators": [',
+    '    {"label": "Live news verification", "type": "positive"},',
+    '    {"label": "Direct source coverage", "type": "positive"}',
+    '  ],',
+    '  "mediaBias": {"left": 20, "center": 60, "right": 20},',
+    '  "socialBuzz": {"velocity": 45, "sentiment": "Neutral", "platforms": ["News", "Web"]}',
+    '}',
     '',
     'STRICT RULES:',
-    '- The JSON keys (verdict, confidence, consensus, evidence, bias, title, subtitle, summary, findings, supporting, contradicting, indicators, label, type, mediaBias, left, center, right, socialBuzz, velocity, sentiment, platforms) must remain in English as defined.',
-    '- verdict must be exactly: REAL, FAKE, or UNCERTAIN',
-    '- confidence, consensus, evidence, bias, left, center, right, and velocity must be integers 0-100',
-    '- All string values must be on one line with no line breaks',
-    '- No bullet points, no special characters, no Unicode symbols in strings',
-    '- findings must be plain sentences separated by periods only',
-    '- supporting must be a JSON array of 1-3 short plain text statements supporting the verdict',
-    '- contradicting must be a JSON array of 1-3 short plain text statements contradicting/debunking the claim'
+    '- JSON keys must remain exactly in English.',
+    '- verdict must be strictly: REAL, FAKE, or UNCERTAIN.',
+    '- confidence, consensus, evidence, bias, left, center, right, velocity must be numbers 0-100.',
+    '- indicators type must be: "positive", "negative", or "neutral".',
+    '- findings must be plain sentences separated by periods.'
   ].join('\n');
 
   try {
-    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": "Bearer " + GROQ_KEY
-      },
-      body: JSON.stringify({
-        model: "llama-3.3-70b-versatile",
-        messages: [
-          {
-            role: "system",
-            content: "You are a fact-checker AI. You ONLY output raw JSON. Never use markdown, backticks, bullet symbols, or newlines inside JSON string values. Plain UTF-8 text only inside strings. IMPORTANT: You must write all textual content in the JSON fields in the requested language: " + language + "."
-          },
-          { role: "user", content: prompt }
-        ],
-        temperature: 0.1,
-        max_tokens: 800
-      })
-    });
+    const { content: raw } = await callGroqWithFallback(
+      GROQ_KEY,
+      [
+        {
+          role: "system",
+          content: "You are a professional fact-checker AI with access to live Google News data. You ONLY output raw JSON. Never use markdown, backticks, or newlines inside string values. Plain UTF-8 text only in " + language + "."
+        },
+        { role: "user", content: prompt }
+      ],
+      1200,
+      0.1
+    );
 
-    const groqData = await response.json();
-    if (!response.ok) {
-      return res.status(502).json({ error: groqData.error && groqData.error.message ? groqData.error.message : "Groq API error" });
-    }
-
-    let raw = groqData.choices && groqData.choices[0] && groqData.choices[0].message && groqData.choices[0].message.content ? groqData.choices[0].message.content : "";
-
-    // Strip any markdown fences
-    raw = raw.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/i, "").trim();
-
-    // Extract the JSON object
-    var start = raw.indexOf("{");
-    var end = raw.lastIndexOf("}");
+    let cleanedRaw = raw.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/i, "").trim();
+    const start = cleanedRaw.indexOf("{");
+    const end = cleanedRaw.lastIndexOf("}");
     if (start === -1 || end === -1 || start >= end) {
-      return res.status(502).json({ error: "Could not parse AI response. Please try again." });
+      return res.status(502).json({ error: "Could not parse AI analysis response. Please try again." });
     }
 
-    var jsonStr = raw.slice(start, end + 1);
-
-    // Clean control characters safely
-    var cleaned = "";
-    var inString = false;
-    var prevChar = "";
-    for (var i = 0; i < jsonStr.length; i++) {
-      var ch = jsonStr[i];
-      var code = jsonStr.charCodeAt(i);
-      if (ch === '"' && prevChar !== '\\') inString = !inString;
-      if (inString && code < 32) {
-        if (code === 9) cleaned += " ";
-        else if (code === 10) cleaned += " ";
-        else if (code === 13) cleaned += " ";
-      } else {
-        cleaned += ch;
-      }
-      prevChar = ch;
-    }
-
-    var result;
+    const jsonStr = cleanJsonString(cleanedRaw.slice(start, end + 1));
+    let result;
     try {
-      result = JSON.parse(cleaned);
+      result = JSON.parse(jsonStr);
     } catch (parseErr) {
-      return res.status(502).json({ error: "Could not parse AI response. Please try again." });
+      return res.status(502).json({ error: "Could not parse AI response JSON. Please try again." });
     }
 
-    // Validate and sanitize result
-    var verdict = String(result.verdict || "UNCERTAIN").toUpperCase();
+    let verdict = String(result.verdict || "UNCERTAIN").toUpperCase();
     if (verdict !== "REAL" && verdict !== "FAKE") verdict = "UNCERTAIN";
 
-    var confidence = parseInt(result.confidence, 10);
+    let confidence = parseInt(result.confidence, 10);
     if (isNaN(confidence) || confidence < 0) confidence = 50;
     if (confidence > 100) confidence = 100;
 
-    var consensus = parseInt(result.consensus, 10);
+    let consensus = parseInt(result.consensus, 10);
     if (isNaN(consensus) || consensus < 0) consensus = 50;
     if (consensus > 100) consensus = 100;
 
-    var evidence = parseInt(result.evidence, 10);
+    let evidence = parseInt(result.evidence, 10);
     if (isNaN(evidence) || evidence < 0) evidence = 50;
     if (evidence > 100) evidence = 100;
 
-    var bias = parseInt(result.bias, 10);
+    let bias = parseInt(result.bias, 10);
     if (isNaN(bias) || bias < 0) bias = 0;
     if (bias > 100) bias = 100;
 
-    // Format findings with bullet prefix for display
-    var findings = String(result.findings || "");
-    var sentences = findings.split(". ");
-    var bulletFindings = sentences
-      .filter(function(s) { return s.trim().length > 2; })
-      .map(function(s) { return "\u2022 " + s.trim().replace(/\.$/, ""); })
+    const findings = String(result.findings || "");
+    const sentences = findings.split(/[.\n]/).filter(s => s.trim().length > 3);
+    const bulletFindings = sentences
+      .map(s => "\u2022 " + s.trim().replace(/\.$/, ""))
       .join("\n");
 
-    var supporting = Array.isArray(result.supporting) ? result.supporting.slice(0, 3).map(String).map(s => s.trim()) : [];
-    var contradicting = Array.isArray(result.contradicting) ? result.contradicting.slice(0, 3).map(String).map(s => s.trim()) : [];
+    const supporting = Array.isArray(result.supporting) ? result.supporting.slice(0, 3).map(String).map(s => s.trim()) : [];
+    const contradicting = Array.isArray(result.contradicting) ? result.contradicting.slice(0, 3).map(String).map(s => s.trim()) : [];
 
-    var clean = {
+    const clean = {
       verdict: verdict,
       confidence: confidence,
       consensus: consensus,
       evidence: evidence,
       bias: bias,
-      title: String(result.title || verdict).slice(0, 80),
-      subtitle: String(result.subtitle || "").slice(0, 200),
-      summary: String(result.summary || "").slice(0, 500),
+      title: String(result.title || verdict).slice(0, 100),
+      subtitle: String(result.subtitle || "").slice(0, 250),
+      summary: String(result.summary || "").slice(0, 600),
       findings: bulletFindings || findings,
       supporting: supporting,
       contradicting: contradicting,
-      indicators: Array.isArray(result.indicators) ? result.indicators.slice(0, 5) : [],
+      indicators: Array.isArray(result.indicators) ? result.indicators.slice(0, 6) : [],
       searchSources: searchSources,
       mediaBias: {
         left: result.mediaBias && typeof result.mediaBias.left === 'number' ? result.mediaBias.left : 33,
@@ -347,13 +443,13 @@ module.exports = async function handler(req, res) {
       socialBuzz: {
         velocity: result.socialBuzz && typeof result.socialBuzz.velocity === 'number' ? result.socialBuzz.velocity : 50,
         sentiment: result.socialBuzz && result.socialBuzz.sentiment ? String(result.socialBuzz.sentiment) : "Neutral",
-        platforms: result.socialBuzz && Array.isArray(result.socialBuzz.platforms) ? result.socialBuzz.platforms : ["Web"]
+        platforms: result.socialBuzz && Array.isArray(result.socialBuzz.platforms) ? result.socialBuzz.platforms : ["Web", "News"]
       }
     };
 
     return res.status(200).json(clean);
 
   } catch (err) {
-    return res.status(500).json({ error: err.message || "Server error. Please try again." });
+    return res.status(500).json({ error: err.message || "Server error during analysis." });
   }
 };
