@@ -32,6 +32,18 @@ app.get('/api/firebase-config', (req, res) => {
   });
 });
 
+// Live Weather API route
+app.get('/api/weather', async (req, res) => {
+  try {
+    delete require.cache[require.resolve('./api/weather.js')];
+    const handler = require('./api/weather.js');
+    await handler(req, res);
+  } catch (err) {
+    console.error("Error in weather handler:", err);
+    res.status(500).json({ error: err.message || "Failed to fetch weather" });
+  }
+});
+
 // Fallback to serve index.html for SPA routing
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
